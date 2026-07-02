@@ -16,7 +16,7 @@ plugins/skins ship? See [Bundled plugins & skins](#bundled-plugins--skins).
 
 ## Links
 
-- **Image source / this repo:** <https://github.com/eilandert/dockerized/tree/master/src/roundcube>
+- **Image source / this repo:** <https://github.com/myguard-labs/dockerized/tree/master/src/roundcube>
 - **Docker Hub:** <https://hub.docker.com/r/eilandert/roundcube>
 - **App source (upstream):** <https://github.com/roundcube/roundcubemail>
 - **Write-up / guided tour:** <https://deb.myguard.nl/2026/06/hardened-roundcube-docker-image/>

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "[LETSENCRYTPT] This docker image can be found on https://hub.docker.com/u/eilandert or https://github.com/eilandert/dockerized"
+echo "[LETSENCRYTPT] This docker image can be found on https://hub.docker.com/u/eilandert or https://github.com/myguard-labs/dockerized"
 
 if [ -n "${TZ}" ]; then
     rm /etc/timezone /etc/localtime

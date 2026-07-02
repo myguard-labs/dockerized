@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7
-# This file might be outdated, see https://github.com/eilandert/dockerized/tree/master/php-fpm for a recent one
+# This file might be outdated, see https://github.com/myguard-labs/dockerized/tree/master/php-fpm for a recent one
 FROM    docker.io/eilandert/debian-base:stable
 LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>" \
         org.opencontainers.image.title="PHP-FPM" \
         org.opencontainers.image.description="PHP-FPM FastCGI Process Manager" \
-        org.opencontainers.image.url="https://github.com/eilandert/dockerized" \
-        org.opencontainers.image.source="https://github.com/eilandert/dockerized/tree/master/php-fpm" \
+        org.opencontainers.image.url="https://github.com/myguard-labs/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized/tree/master/php-fpm" \
         org.opencontainers.image.vendor="MyGuard" \
         org.opencontainers.image.version="7.4"
 ENV     DEBIAN_FRONTEND="noninteractive" \

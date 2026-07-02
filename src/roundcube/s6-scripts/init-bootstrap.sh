@@ -30,7 +30,7 @@ INSTALLDIR="${INSTALLDIR:-/var/www/html}"
 export RCUBE_CONFIG_PATH="/var/roundcube/config/:config/"
 
 log() { echo "[ROUNDCUBE] $*"; }
-log "Image src: https://github.com/eilandert/dockerized/tree/master/src/roundcube"
+log "Image src: https://github.com/myguard-labs/dockerized/tree/master/src/roundcube"
 log "Docker Hub: https://hub.docker.com/r/eilandert/roundcube"
 log "Write-up  : https://deb.myguard.nl/2026/06/hardened-roundcube-docker-image/"
 log "---------------------------------------------------------------------------"
@@ -266,7 +266,7 @@ fi
 # ---------------------------------------------------------------------------
 # Schema: initialise / migrate the DB. CLI-only (PHP CLI through Roundcube's own
 # DB layer) — does NOT need php-fpm, so it runs here in the oneshot, before the
-# pool comes up. See github.com/eilandert/dockerized#81 for why this is more than
+# pool comes up. See github.com/myguard-labs/dockerized#81 for why this is more than
 # `initdb || updatedb` (that masked failures and could run the destructive init
 # on a half-ready DB). We probe the ACTUAL schema, create-when-absent /
 # migrate-when-present, and LOG the output.

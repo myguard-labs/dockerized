@@ -9,7 +9,7 @@ IMAP and POP3 — plus LMTP (local delivery from your MTA), ManageSieve
 
 ## See also
 
-- **Image source / this repo:** <https://github.com/eilandert/dockerized/tree/master/src/dovecot-ubuntu>
+- **Image source / this repo:** <https://github.com/myguard-labs/dockerized/tree/master/src/dovecot-ubuntu>
 - **Docker Hub:** <https://hub.docker.com/r/eilandert/dovecot>
 - **Packages:** <https://deb.myguard.nl>
 - **Write-up / guided tour:** _TODO — link the deb.myguard.nl article once published._
@@ -53,7 +53,7 @@ on the `vmail` named volume; point the TLS config at your real certificate
 #  Dovecot — hardened IMAP/POP3/LMTP/ManageSieve server
 # =============================================================================
 #  Packages built on https://deb.myguard.nl
-#  Image src     : https://github.com/eilandert/dockerized/tree/master/src/dovecot-ubuntu
+#  Image src     : https://github.com/myguard-labs/dockerized/tree/master/src/dovecot-ubuntu
 #  Docker Hub    : https://hub.docker.com/r/eilandert/dovecot
 #
 #  Security model — Dovecot's NATIVE privilege separation, caged:

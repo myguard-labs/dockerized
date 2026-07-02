@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "[PHP-FPM] This docker image can be found on https://hub.docker.com/u/eilandert or https://github.com/eilandert/dockerized"
+echo "[PHP-FPM] This docker image can be found on https://hub.docker.com/u/eilandert or https://github.com/myguard-labs/dockerized"
 
 chmod 777 /dev/stdout
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "[UNBOUND] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/eilandert/dockerized"
+echo "[UNBOUND] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/myguard-labs/dockerized"
 
 UNBOUNDCONF="/config/unbound.conf"
 if [ ! -f ${UNBOUNDCONF} ]; then

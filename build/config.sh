@@ -53,7 +53,7 @@ declare -ga PHP_VERSIONS=(5.6 7.4 8.0 8.2 8.4 8.5)
 # REPOSITORY INFORMATION
 # ============================================================================
 
-export GITHUB_REPO_URL="https://github.com/eilandert/dockerized"
+export GITHUB_REPO_URL="https://github.com/myguard-labs/dockerized"
 export GITHUB_REPO_USER="eilandert"
 
 # ============================================================================

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 FROM alpine:3.20 AS build
 LABEL org.opencontainers.image.authors="eilandert"
-LABEL org.opencontainers.image.source="https://github.com/eilandert/dockerized"
+LABEL org.opencontainers.image.source="https://github.com/myguard-labs/dockerized"
 
 RUN apk update && apk upgrade && \
     apk add --no-cache git gcc musl-dev pkgconfig zlib-dev zlib-static \
@@ -22,7 +22,7 @@ COPY badhosts.zone /zones/badhosts.zone
 
 FROM scratch
 LABEL org.opencontainers.image.authors="eilandert"
-LABEL org.opencontainers.image.source="https://github.com/eilandert/dockerized"
+LABEL org.opencontainers.image.source="https://github.com/myguard-labs/dockerized"
 
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /opt/rbldnsd/rbldnsd /opt/rbldnsd

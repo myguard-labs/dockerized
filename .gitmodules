@@ -1,9 +1,9 @@
 [submodule "src/rspamd-dcc-razor-pyzor"]
 	path = src/rspamd-dcc-razor-pyzor
-	url = git@github.com:eilandert/rspamd-dcc-razor-pyzor.git
+	url = git@github.com:myguard-labs/rspamd-dcc-razor-pyzor.git
 [submodule "src/rspamd-olefy"]
 	path = src/rspamd-olefy
-	url = git@github.com:eilandert/rspamd-olefy.git
+	url = git@github.com:myguard-labs/rspamd-olefy.git
 [submodule "src/mailstrix"]
 	path = src/mailstrix
-	url = git@github.com:eilandert/mailstrix.git
+	url = git@github.com:myguard-labs/mailstrix.git

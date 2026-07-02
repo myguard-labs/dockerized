@@ -2,7 +2,7 @@
 #  Dovecot — hardened IMAP/POP3/LMTP/ManageSieve server
 # =============================================================================
 #  Packages built on https://deb.myguard.nl
-#  Image src     : https://github.com/eilandert/dockerized/tree/master/src/dovecot-ubuntu
+#  Image src     : https://github.com/myguard-labs/dockerized/tree/master/src/dovecot-ubuntu
 #  Docker Hub    : https://hub.docker.com/r/eilandert/dovecot
 #
 #  Security model — Dovecot's NATIVE privilege separation, caged:

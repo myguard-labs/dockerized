@@ -14,7 +14,7 @@ all-in-one web+PHP container.
 
 ## Links
 
-- **Image source / this repo:** <https://github.com/eilandert/dockerized/tree/master/src/nginx>
+- **Image source / this repo:** <https://github.com/myguard-labs/dockerized/tree/master/src/nginx>
 - **Docker Hub:** <https://hub.docker.com/r/eilandert/nginx>
 - **Write-up / guided tour:** <https://deb.myguard.nl/nginx-dockerized/>
 - **nginx packages / module list:** <https://deb.myguard.nl/nginx-modules/>

@@ -146,4 +146,4 @@ If a build fails on a base layer, rebuild that layer first — `buildx-sequentia
 - Module catalogue: **[deb.myguard.nl/nginx-modules/](https://deb.myguard.nl/nginx-modules/)**
 - All articles: **[deb.myguard.nl/articles/](https://deb.myguard.nl/articles/)**
 - Discord: **[discord.gg/UQNsFg2y](https://discord.gg/UQNsFg2y)**
-- Source: [github.com/eilandert/dockerized](https://github.com/eilandert/dockerized)
+- Source: [github.com/myguard-labs/dockerized](https://github.com/myguard-labs/dockerized)

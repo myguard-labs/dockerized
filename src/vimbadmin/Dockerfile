@@ -20,7 +20,7 @@ FROM    docker.io/eilandert/debian-base:stable
 LABEL   org.opencontainers.image.authors="eilandert" \
         org.opencontainers.image.title="ViMbAdmin" \
         org.opencontainers.image.description="ViMbAdmin (modernised fork) on Angie-minimal + PHP-FPM 8.5" \
-        org.opencontainers.image.source="https://github.com/eilandert/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized" \
         org.opencontainers.image.url="https://hub.docker.com/r/eilandert/vimbadmin" \
         org.opencontainers.image.vendor="MyGuard"
 

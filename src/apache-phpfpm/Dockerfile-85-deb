@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
-# This file might be outdated, see https://github.com/eilandert/dockerized/tree/master/apache-phpfpm for a recent one
+# This file might be outdated, see https://github.com/myguard-labs/dockerized/tree/master/apache-phpfpm for a recent one
 
 FROM    docker.io/eilandert/php-fpm:deb-8.5
 LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>" \
         org.opencontainers.image.title="Apache with PHP-FPM" \
         org.opencontainers.image.description="Apache web server with PHP-FPM FastCGI backend" \
-        org.opencontainers.image.url="https://github.com/eilandert/dockerized" \
-        org.opencontainers.image.source="https://github.com/eilandert/dockerized/tree/master/apache-phpfpm" \
+        org.opencontainers.image.url="https://github.com/myguard-labs/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized/tree/master/apache-phpfpm" \
         org.opencontainers.image.vendor="MyGuard" \
         org.opencontainers.image.version="8.5"
 ENV     DEBIAN_FRONTEND="noninteractive" \

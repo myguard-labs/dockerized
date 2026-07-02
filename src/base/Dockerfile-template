@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1.7
-# This file might be outdated, see https://github.com/eilandert/dockerized/tree/master/base for a recent one
+# This file might be outdated, see https://github.com/myguard-labs/dockerized/tree/master/base for a recent one
 FROM    #TEMPLATE1#
 LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>" \
         org.opencontainers.image.title="Base image" \
         org.opencontainers.image.description="Minimal hardened MyGuard base image" \
-        org.opencontainers.image.url="https://github.com/eilandert/dockerized" \
-        org.opencontainers.image.source="https://github.com/eilandert/dockerized/tree/master/base" \
+        org.opencontainers.image.url="https://github.com/myguard-labs/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized/tree/master/base" \
         org.opencontainers.image.vendor="MyGuard"
 ENV     DEBIAN_FRONTEND="noninteractive" \
         DIST=#TEMPLATE2# \

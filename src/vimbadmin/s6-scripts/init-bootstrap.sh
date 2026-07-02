@@ -11,7 +11,7 @@ set -e
 
 echo "[VIMBADMIN] Angie-minimal + PHP-FPM ${PHPVERSION} (s6-supervised)"
 echo "[VIMBADMIN] App fork : https://github.com/eilandert/ViMbAdmin"
-echo "[VIMBADMIN] Image src: https://github.com/eilandert/dockerized/tree/master/src/vimbadmin"
+echo "[VIMBADMIN] Image src: https://github.com/myguard-labs/dockerized/tree/master/src/vimbadmin"
 echo "[VIMBADMIN] ---------------------------------------------------------------"
 echo "[VIMBADMIN] Security profile: runs UNPRIVILEGED (no root), cap_drop ALL +"
 echo "[VIMBADMIN]   no-new-privileges + AppArmor, read-only rootfs, Angie on :8080."

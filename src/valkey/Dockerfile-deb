@@ -2,7 +2,7 @@
 FROM eilandert/debian-base:stable
 
 LABEL org.opencontainers.image.authors="eilandert" \
-      org.opencontainers.image.source="https://github.com/eilandert/dockerized" \
+      org.opencontainers.image.source="https://github.com/myguard-labs/dockerized" \
       org.opencontainers.image.url="https://hub.docker.com/r/eilandert/valkey" \
       org.opencontainers.image.documentation="https://deb.myguard.nl/2026/05/valkey-explained-redis-fork-debian-ubuntu-package/" \
       org.opencontainers.image.title="Valkey (myguard build, Debian)" \

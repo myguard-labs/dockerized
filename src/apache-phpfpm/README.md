@@ -56,5 +56,5 @@ Distro + PHP version, e.g. `deb-8.4`, `deb-5.6`, `ubu-8.5`. Pin one in productio
 - **All Docker images:** https://deb.myguard.nl/nginx-dockerized/
 - **Package repo & articles:** https://deb.myguard.nl
 - **Docker hardening guide:** https://deb.myguard.nl/2026/05/docker-hardening-rootless-readonly-distroless/
-- **Source:** https://github.com/eilandert/dockerized
+- **Source:** https://github.com/myguard-labs/dockerized
 - **Discord:** https://discord.gg/UQNsFg2y

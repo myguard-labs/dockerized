@@ -15,7 +15,7 @@ all-in-one web+PHP container.
 
 ## Links
 
-- **Image source / this repo:** <https://github.com/eilandert/dockerized/tree/master/src/angie>
+- **Image source / this repo:** <https://github.com/myguard-labs/dockerized/tree/master/src/angie>
 - **Docker Hub:** <https://hub.docker.com/r/eilandert/angie>
 - **Write-up / guided tour:** <https://deb.myguard.nl/angie-dockerized/>
 - **angie packages / module list:** <https://deb.myguard.nl/angie-modules/>

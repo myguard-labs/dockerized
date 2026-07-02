@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "[OPENSSH] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/eilandert/dockerized"
+echo "[OPENSSH] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/myguard-labs/dockerized"
 
 host_keys_required() {
     echo /etc/ssh/ssh_host_rsa_key

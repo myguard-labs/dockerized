@@ -37,5 +37,5 @@ CMD ["/bootstrap.sh"]
 - **All Docker images:** https://deb.myguard.nl/nginx-dockerized/
 - **How to add the APT repo:** https://deb.myguard.nl/how-to-use/
 - **Docker hardening guide:** https://deb.myguard.nl/2026/05/docker-hardening-rootless-readonly-distroless/
-- **Source:** https://github.com/eilandert/dockerized
+- **Source:** https://github.com/myguard-labs/dockerized
 - **Discord:** https://discord.gg/UQNsFg2y

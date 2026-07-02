@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# This file might be outdated, see https://github.com/eilandert/dockerized/tree/master/roundcube for a recent one
+# This file might be outdated, see https://github.com/myguard-labs/dockerized/tree/master/roundcube for a recent one
 #
 # Roundcube webmail, hardened.
 #   * base   : eilandert/debian-base:stable (Debian trixie, already hardened,
@@ -17,7 +17,7 @@
 
 FROM    eilandert/debian-base:stable
 LABEL   org.opencontainers.image.authors="eilandert" \
-        org.opencontainers.image.source="https://github.com/eilandert/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized" \
         org.opencontainers.image.title="Roundcube" \
         org.opencontainers.image.description="Hardened Roundcube webmail (PHP 8.5 FPM + Snuffleupagus + Angie)" \
         maintainer="Thijs Eilander <eilander@myguard.nl>"

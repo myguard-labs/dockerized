@@ -62,5 +62,5 @@ volumes:
 - **The Angie build underneath:** [Post-Quantum Cryptography with NGINX and Angie](https://deb.myguard.nl/2026/05/post-quantum-cryptography-with-nginx-and-angie-ml-kem-hybrid-tls-and-how-to-configure-it/)
 - **Package repo & articles:** https://deb.myguard.nl
 - **Docker hardening guide:** https://deb.myguard.nl/2026/05/docker-hardening-rootless-readonly-distroless/
-- **Source:** https://github.com/eilandert/dockerized
+- **Source:** https://github.com/myguard-labs/dockerized
 - **Discord:** https://discord.gg/UQNsFg2y

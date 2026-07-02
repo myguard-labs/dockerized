@@ -25,7 +25,7 @@ AM_ROOT=0; [ "$(id -u)" = "0" ] && AM_ROOT=1
 # to write a dotfile. /tmp is always a writable tmpfs.
 export HOME=/tmp
 
-log "Image src : https://github.com/eilandert/dockerized/tree/master/src/dovecot-ubuntu"
+log "Image src : https://github.com/myguard-labs/dockerized/tree/master/src/dovecot-ubuntu"
 log "Docker Hub: https://hub.docker.com/r/eilandert/dovecot"
 log "Packages  : https://deb.myguard.nl"
 log "Running as: uid=$(id -u) gid=$(id -g) ($([ "${AM_ROOT}" = 1 ] && echo root || echo unprivileged))"

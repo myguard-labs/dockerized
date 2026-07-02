@@ -65,5 +65,5 @@ Tags encode distro + version, e.g. `deb-8.4`, `deb-8.5`, `ubu-8.4`. Pin one.
 - **All Docker images:** https://deb.myguard.nl/nginx-dockerized/
 - **Package repo & articles:** https://deb.myguard.nl
 - **Docker hardening guide:** https://deb.myguard.nl/2026/05/docker-hardening-rootless-readonly-distroless/
-- **Source:** https://github.com/eilandert/dockerized
+- **Source:** https://github.com/myguard-labs/dockerized
 - **Discord:** https://discord.gg/UQNsFg2y

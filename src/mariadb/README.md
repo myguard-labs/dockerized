@@ -153,7 +153,7 @@ Westmere Xeon hosts that v3 would `SIGILL` on. Check a host with
 
 ## Links
 
-- **Image source / this repo:** https://github.com/eilandert/dockerized/tree/master/src/mariadb
+- **Image source / this repo:** https://github.com/myguard-labs/dockerized/tree/master/src/mariadb
 - **Docker Hub:** https://hub.docker.com/r/eilandert/mariadb
 - **All Docker images:** https://deb.myguard.nl/nginx-dockerized/
 - **Package repo & articles:** https://deb.myguard.nl

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 FROM    eilandert/debian-base:stable
 LABEL org.opencontainers.image.authors="eilandert"
-LABEL org.opencontainers.image.source="https://github.com/eilandert/dockerized"
+LABEL org.opencontainers.image.source="https://github.com/myguard-labs/dockerized"
 
 LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>"
 ENV     DEBIAN_FRONTEND="noninteractive"

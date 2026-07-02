@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "[POSTFIX] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/eilandert/dockerized"
+echo "[POSTFIX] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/myguard-labs/dockerized"
 
 case ${MALLOC} in
     jemalloc)

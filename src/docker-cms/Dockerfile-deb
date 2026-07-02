@@ -7,8 +7,8 @@ FROM    docker.io/eilandert/angie:deb-php8.5
 LABEL   maintainer="Thijs Eilander <eilandert@myguard.nl>" \
         org.opencontainers.image.title="MyGuard CMS (Angie + PHP-FPM 8.5)" \
         org.opencontainers.image.description="Angie + PHP-FPM 8.5 (debian) tuned for WordPress/Drupal/Joomla: composer, wp-cli + extras, drush, git, patch, libvips/imagemagick, AVIF/WebP encoders, image-optim toolchain (jpegoptim/optipng/oxipng/pngquant/gifsicle), EXIF + metadata strippers (exiftool/exiv2/mat2/scour), restic/rclone, goaccess. PHP isolated from sudo via the phpfpm user." \
-        org.opencontainers.image.url="https://github.com/eilandert/dockerized" \
-        org.opencontainers.image.source="https://github.com/eilandert/dockerized/tree/master/docker-cms" \
+        org.opencontainers.image.url="https://github.com/myguard-labs/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized/tree/master/docker-cms" \
         org.opencontainers.image.vendor="MyGuard" \
         org.opencontainers.image.version="8.5"
 
