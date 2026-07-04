@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" width="200" height="48">
+  <!-- Outlook-style envelope/page mark -->
+  <rect x="4" y="10" width="28" height="28" rx="4" fill="#0f6cbd"/>
+  <text x="18" y="33" font-family="Segoe UI, Arial, sans-serif" font-size="20"
+        font-weight="700" fill="#fff" text-anchor="middle">O</text>
+  <text x="42" y="33" font-family="Segoe UI, Arial, sans-serif" font-size="22"
+        font-weight="600" fill="#0f6cbd">Outlook</text>
+</svg>

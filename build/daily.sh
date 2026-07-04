@@ -58,7 +58,17 @@ export MAILSTRIX_RELEASE="$(gh release view --repo eilandert/mailstrix --json ta
 # Fallback to the nearest git tag if gh is unavailable (no network/auth).
 [[ -z "$MAILSTRIX_RELEASE" ]] && \
     export MAILSTRIX_RELEASE="$(git -C "$REPO_DIR/src/mailstrix" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "")"
-echo "[daily] VCS_REF=$VCS_REF BUILD_DATE=$BUILD_DATE MAILSTRIX_VERSION=$MAILSTRIX_VERSION MAILSTRIX_RELEASE=$MAILSTRIX_RELEASE"
+# If BOTH gh and git describe came back empty (gh unauth/rate-limited AND no local
+# tag), do NOT invoke the mailstrix target with an empty VERSION build-arg —
+# Dockerfile.release's `test -n "${VERSION}"` guard would abort mid-build and mark
+# the whole daily run failed. Fail loud, skip mailstrix, let the rest build.
+SKIP_MAILSTRIX=""
+if [[ -z "$MAILSTRIX_RELEASE" ]]; then
+    echo "[daily] WARN: could not resolve MAILSTRIX_RELEASE (gh + git describe both empty) — skipping debian-mailstrix this run" >&2
+    SKIP_MAILSTRIX=1
+    export SKIP_MAILSTRIX
+fi
+echo "[daily] VCS_REF=$VCS_REF BUILD_DATE=$BUILD_DATE MAILSTRIX_VERSION=$MAILSTRIX_VERSION MAILSTRIX_RELEASE=$MAILSTRIX_RELEASE SKIP_MAILSTRIX=${SKIP_MAILSTRIX:-0}"
 
 # --- run the orchestrator, capturing output for the summary --------------------
 RUN_LOG="$(mktemp /tmp/dockerized-daily-run.XXXXXX.log)"

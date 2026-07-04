@@ -160,7 +160,7 @@ declare -a LAYERS=(
     "ubuntu-nginx-php56 debian-nginx-php56 ubuntu-nginx-php74 debian-nginx-php74 ubuntu-nginx-php80 debian-nginx-php80 ubuntu-nginx-php82 debian-nginx-php82 ubuntu-nginx-php84 debian-nginx-php84 ubuntu-nginx-php85 debian-nginx-php85 ubuntu-nginx-multi debian-nginx-multi ubuntu-angie-php56 debian-angie-php56 ubuntu-angie-php74 debian-angie-php74 ubuntu-angie-php80 debian-angie-php80 ubuntu-angie-php82 debian-angie-php82 ubuntu-angie-php84 debian-angie-php84 ubuntu-angie-php85 debian-angie-php85 ubuntu-angie-multi debian-angie-multi debian-apache-php56 debian-apache-php74 debian-apache-php80 debian-apache-php82 debian-apache-php84 debian-apache-php85 debian-apache-multiphp ubuntu-apache-php56 ubuntu-apache-php74 ubuntu-apache-php80 ubuntu-apache-php82 ubuntu-apache-php84 ubuntu-apache-php85 ubuntu-apache-multiphp"
     
     # Layer 4: Other web servers and services - depends on base images
-    "debian-nginx ubuntu-nginx debian-angie ubuntu-angie ubuntu-postfix debian-postfix debian-rspamd-git debian-rspamd debian-rspamd-official ubuntu-rspamd debian-rspamd-drp debian-olefied debian-mailstrix debian-dovecot debian-roundcube debian-webtest debian-vimbadmin ubuntu-reprepro debian-sitewarmup alpine-letsencrypt rbldnsd alpine-unbound aptly debian-openssh"
+    "debian-nginx ubuntu-nginx debian-angie ubuntu-angie debian-angie-cms ubuntu-postfix debian-postfix debian-rspamd-git debian-rspamd debian-rspamd-official ubuntu-rspamd debian-rspamd-drp debian-olefied debian-mailstrix debian-dovecot debian-roundcube debian-webtest debian-vimbadmin ubuntu-reprepro debian-sitewarmup alpine-letsencrypt rbldnsd alpine-unbound aptly debian-openssh"
 )
 
 echo ""
@@ -217,6 +217,26 @@ for LAYER in "${LAYERS[@]}"; do
         # Progress display
         pct=$((CURRENT_TARGET_NUM * 100 / TOTAL_TARGETS))
         log_build "[$CURRENT_TARGET_NUM/$TOTAL_TARGETS ($pct%)] Layer $LAYER_NUM, Target $TARGET_IN_LAYER/$layer_size: $TARGET"
+
+        # mailstrix needs a non-empty VERSION (Dockerfile.release's
+        # `test -n "${VERSION}"` guard). daily.sh normally exports MAILSTRIX_RELEASE,
+        # but a direct `buildx-sequential.sh` call (or a gh hiccup) can leave it
+        # empty — then bake would pass VERSION="" and the target aborts, counting as
+        # a failure. Resolve it here as a self-contained last resort (gh → git tag),
+        # and only if BOTH fail skip the target cleanly instead of building broken.
+        if [[ "$TARGET" == "debian-mailstrix" ]]; then
+            if [[ -z "${MAILSTRIX_RELEASE:-}" ]]; then
+                MAILSTRIX_RELEASE="$(gh release view --repo eilandert/mailstrix --json tagName -q .tagName 2>/dev/null | sed 's/^v//')"
+                [[ -z "$MAILSTRIX_RELEASE" ]] && \
+                    MAILSTRIX_RELEASE="$(git -C "$PROJECT_ROOT/src/mailstrix" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+                export MAILSTRIX_RELEASE
+            fi
+            if [[ -z "$MAILSTRIX_RELEASE" ]]; then
+                log_warning "Skipping $TARGET — could not resolve MAILSTRIX_RELEASE (gh + git tag both empty)"
+                continue
+            fi
+            log_info "  mailstrix VERSION=$MAILSTRIX_RELEASE"
+        fi
         
         # Individual log per target
         TARGET_LOG="/tmp/buildx-target-$TARGET.log"

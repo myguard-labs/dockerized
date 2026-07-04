@@ -228,7 +228,10 @@ group "misc" {
 target "debian-angie-cms" {
     dockerfile = "Dockerfile-deb"
     context = "src/docker-cms"
-    tags = ["docker.io/eilandert/angie-cms:debian", "docker.io/eilandert/angie-cms:latest"]
+    # :debian-s6 is the tag the deployed myguard stack pins (docker-compose.yml).
+    # The image is already s6-based, so it's the same content — keep the tag so
+    # `compose pull` on the host tracks the daily rebuild.
+    tags = ["docker.io/eilandert/angie-cms:debian", "docker.io/eilandert/angie-cms:debian-s6", "docker.io/eilandert/angie-cms:latest"]
     contexts = {
         "docker.io/eilandert/angie:deb-php8.5" = "target:debian-angie-php85"
     }
@@ -647,8 +650,8 @@ target "debian-roundcube" {
    dockerfile = "Dockerfile"
    contexts = {
       "eilandert/debian-base:stable" = "target:debian-base"
-      "skin-gmail"      = "../roundcube-skin-gmail"
-      "skin-outlook365" = "../roundcube-skin-outlook365"
+      "skin-gmail"      = "src/roundcube/roundcube-skin-gmail"
+      "skin-outlook365" = "src/roundcube/roundcube-skin-outlook365"
    }
 }
 

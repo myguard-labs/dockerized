@@ -103,6 +103,24 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');" ;\
     php /tmp/composer-setup.php --filename=composer --install-dir=/usr/bin ;\
     rm -f /tmp/composer-setup.php ;\
+    # Force ALL github access over HTTPS, never ssh. The elastic4mobile VCS repo
+    # is a `dev-master` (branch) requirement → composer clones from source, and
+    # composer's VCS driver rewrites the repo URL to git@github.com:... (ssh),
+    # which failed with `Failed to clone the git@github.com:...` (no credentials /
+    # no ssh in the build). `composer config github-protocols https` is NOT enough
+    # — it governs dist selection, not the git remote. The authoritative fix is a
+    # git insteadOf rewrite: every ssh://git@github URL becomes https at the git
+    # layer, so composer's ssh URL is transparently fetched over https.
+    git config --global url."https://github.com/".insteadOf "git@github.com:" ;\
+    git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" ;\
+    composer config --global github-protocols https ;\
+    composer config --global secure-http true ;\
+    # roundcube plugins install via composer/installers, a Composer *plugin*.
+    # Composer 2 blocks plugins unless allow-listed, else `require` aborts with
+    # "composer/installers contains a Composer plugin which is blocked by your
+    # allow-plugins config". Allow the plugins we actually use up front.
+    composer config --global allow-plugins.composer/installers true ;\
+    composer config --global allow-plugins.roundcube/plugin-installer true ;\
     # ---- move baked configs into place now that the packages are installed ----
     mv /usr/local/share/roundcube/angie.conf /etc/angie/angie.conf ;\
     mv /usr/local/share/roundcube/www.conf  "/etc/php/${PHPVERSION}/fpm/pool.d/www.conf" ;\
@@ -118,11 +136,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # RC <=1.6 ships composer.json-dist; RC 1.7+ ships composer.json directly.
     [ -f composer.json-dist ] && mv composer.json-dist composer.json || true ;\
     # Pull elastic4mobile from the eilandert fork, NOT upstream. The fork keeps
-    # the upstream composer name `roundcube/elastic4mobile`, so without this VCS
-    # repo composer would resolve it off plugins.roundcube.net (upstream). A repo
-    # entry sources it from the fork git; dev-master then comes from the fork.
-    composer config repositories.elastic4mobile vcs \
-        https://github.com/eilandert/roundcube-elastic4mobile ;\
+    # the upstream composer name `roundcube/elastic4mobile`, so without this repo
+    # entry composer resolves it off plugins.roundcube.net (upstream).
+    # Use a `package` repo pointing at the branch DIST TARBALL (https), NOT a `vcs`
+    # repo: a vcs repo makes composer's GitDriver clone from source, and it probes
+    # `git@github.com:` (ssh) which fails in this credential-less build
+    # (`Failed to clone the git@github.com:...`). A package/dist repo is a plain
+    # https tarball download — no git, no ssh, deterministic.
+    composer config repositories.elastic4mobile '{"type":"package","package":{"name":"roundcube/elastic4mobile","version":"dev-master","type":"roundcube-plugin","dist":{"type":"tar","url":"https://github.com/eilandert/roundcube-elastic4mobile/archive/refs/heads/master.tar.gz"}}}' ;\
     composer -n update --no-dev --no-scripts --no-autoloader ;\
     # All extra deps in ONE require: a single dependency solve instead of six.
     # (-W lets transitive constraints upgrade; --no-scripts skips package post

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" width="200" height="48">
+  <!-- Gmail-style envelope mark in Google colours -->
+  <g transform="translate(4,12)">
+    <rect x="0" y="0" width="34" height="24" rx="3" fill="#fff" stroke="#e0e0e0"/>
+    <path d="M0 3 L17 15 L34 3" fill="none" stroke="#ea4335" stroke-width="3"/>
+    <path d="M0 3 L0 0 L6 0 Z" fill="#c5221f"/>
+    <path d="M34 3 L34 0 L28 0 Z" fill="#fbbc04"/>
+  </g>
+  <text x="46" y="33" font-family="Google Sans, Arial, sans-serif" font-size="22"
+        font-weight="400" fill="#5f6368">Gmail</text>
+</svg>
