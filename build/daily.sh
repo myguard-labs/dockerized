@@ -57,9 +57,13 @@ export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # so no SKIP flag needs threading through here — just warn for visibility.
 export MAILSTRIX_VERSION="$(mailstrix_source_version "$REPO_DIR/src/mailstrix")"
 export MAILSTRIX_RELEASE="$(resolve_mailstrix_release "$REPO_DIR/src/mailstrix")"
+# mailstrix:testing builds the current main commit; pin it so the git context
+# and the image's revision label agree. Falls back to "main" if unresolved.
+MAILSTRIX_MAIN_REF="$(git ls-remote "https://github.com/$MAILSTRIX_GH_REPO.git" refs/heads/main 2>/dev/null | cut -f1)"
+export MAILSTRIX_MAIN_REF="${MAILSTRIX_MAIN_REF:-main}"
 [[ -z "$MAILSTRIX_RELEASE" ]] && \
     echo "[daily] WARN: could not resolve MAILSTRIX_RELEASE (gh + git describe both empty) — debian-mailstrix will be skipped this run" >&2
-echo "[daily] VCS_REF=$VCS_REF BUILD_DATE=$BUILD_DATE MAILSTRIX_VERSION=$MAILSTRIX_VERSION MAILSTRIX_RELEASE=$MAILSTRIX_RELEASE"
+echo "[daily] VCS_REF=$VCS_REF BUILD_DATE=$BUILD_DATE MAILSTRIX_VERSION=$MAILSTRIX_VERSION MAILSTRIX_RELEASE=$MAILSTRIX_RELEASE MAILSTRIX_MAIN_REF=$MAILSTRIX_MAIN_REF"
 
 # --- run the orchestrator, capturing output for the summary --------------------
 RUN_LOG="$(mktemp /tmp/dockerized-daily-run.XXXXXX.log)"

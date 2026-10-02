@@ -11,6 +11,10 @@ variable "MAILSTRIX_VERSION" { default = "dev" }
 # debian-mailstrix's Dockerfile.release downloads the per-arch release binaries
 # from this tag and tags the image with it. Must name a release that has assets.
 variable "MAILSTRIX_RELEASE" { default = "" }
+# The mailstrix main commit :testing is built from. daily.sh resolves it with
+# git ls-remote so the git context and the revision label name the same
+# commit; an ad-hoc build without it falls back to the moving main branch.
+variable "MAILSTRIX_MAIN_REF" { default = "main" }
 
 # Shared metadata. Targets inherit this to receive VCS_REF / BUILD_DATE both as
 # build-args (for Dockerfiles that bake them into their own LABEL block, e.g.
@@ -339,7 +343,7 @@ group "apache-misc" {
 
 group "mail" {
     targets = [
-       "ubuntu-postfix", "debian-postfix", "debian-rspamd-git", "debian-rspamd", "debian-rspamd-official", "ubuntu-rspamd", "debian-rspamd-drp", "debian-dovecot", "debian-olefied", "debian-mailstrix" ]
+       "ubuntu-postfix", "debian-postfix", "debian-rspamd-git", "debian-rspamd", "debian-rspamd-official", "ubuntu-rspamd", "debian-rspamd-drp", "debian-dovecot", "debian-olefied", "debian-mailstrix", "debian-mailstrix-testing" ]
 }
 
 group "db" {
@@ -619,6 +623,23 @@ target "debian-mailstrix" {
    platforms = ["linux/amd64", "linux/arm64"]
    # VERSION = the release tag whose per-arch binaries Dockerfile.release pulls.
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "${MAILSTRIX_RELEASE}" }
+}
+# mailstrix:testing — the default branch (main) built from source, with the
+# latest public rulesets (CACHEBUST re-pulls them every daily run). :latest and
+# :<version> above stay on the newest published release. Built straight from
+# the public git repo, so it always tracks main and never the src/mailstrix pin.
+# amd64 only: Dockerfile compiles Go + static libyara, far too slow under QEMU.
+target "debian-mailstrix-testing" {
+    inherits = ["_meta"]
+   tags = ["docker.io/eilandert/mailstrix:testing"]
+   context = "https://github.com/myguard-labs/mailstrix.git#${MAILSTRIX_MAIN_REF}"
+   dockerfile = "docker/Dockerfile"
+   target = "final"
+   # The inherited revision label names the dockerized commit; this image is
+   # built from mailstrix, so label it with the mailstrix commit instead.
+   labels = { "org.opencontainers.image.revision" = MAILSTRIX_MAIN_REF, "org.opencontainers.image.source" = "https://github.com/myguard-labs/mailstrix" }
+   platforms = ["linux/amd64"]
+   args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing" }
 }
 target "debian-sitewarmup" {
     inherits = ["_meta"]
