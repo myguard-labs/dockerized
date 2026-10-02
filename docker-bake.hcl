@@ -11,6 +11,10 @@ variable "MAILSTRIX_VERSION" { default = "dev" }
 # debian-mailstrix's Dockerfile.release downloads the per-arch release binaries
 # from this tag and tags the image with it. Must name a release that has assets.
 variable "MAILSTRIX_RELEASE" { default = "" }
+# The mailstrix main commit :testing is built from. daily.sh resolves it with
+# git ls-remote so the git context and the revision label name the same
+# commit; an ad-hoc build without it falls back to the moving main branch.
+variable "MAILSTRIX_MAIN_REF" { default = "main" }
 
 # Shared metadata. Targets inherit this to receive VCS_REF / BUILD_DATE both as
 # build-args (for Dockerfiles that bake them into their own LABEL block, e.g.
@@ -628,9 +632,12 @@ target "debian-mailstrix" {
 target "debian-mailstrix-testing" {
     inherits = ["_meta"]
    tags = ["docker.io/eilandert/mailstrix:testing"]
-   context = "https://github.com/myguard-labs/mailstrix.git#main"
+   context = "https://github.com/myguard-labs/mailstrix.git#${MAILSTRIX_MAIN_REF}"
    dockerfile = "docker/Dockerfile"
    target = "final"
+   # The inherited revision label names the dockerized commit; this image is
+   # built from mailstrix, so label it with the mailstrix commit instead.
+   labels = { "org.opencontainers.image.revision" = MAILSTRIX_MAIN_REF, "org.opencontainers.image.source" = "https://github.com/myguard-labs/mailstrix" }
    platforms = ["linux/amd64"]
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing" }
 }
