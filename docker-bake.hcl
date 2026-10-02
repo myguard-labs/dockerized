@@ -339,7 +339,7 @@ group "apache-misc" {
 
 group "mail" {
     targets = [
-       "ubuntu-postfix", "debian-postfix", "debian-rspamd-git", "debian-rspamd", "debian-rspamd-official", "ubuntu-rspamd", "debian-rspamd-drp", "debian-dovecot", "debian-olefied", "debian-mailstrix" ]
+       "ubuntu-postfix", "debian-postfix", "debian-rspamd-git", "debian-rspamd", "debian-rspamd-official", "ubuntu-rspamd", "debian-rspamd-drp", "debian-dovecot", "debian-olefied", "debian-mailstrix", "debian-mailstrix-testing" ]
 }
 
 group "db" {
@@ -619,6 +619,20 @@ target "debian-mailstrix" {
    platforms = ["linux/amd64", "linux/arm64"]
    # VERSION = the release tag whose per-arch binaries Dockerfile.release pulls.
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "${MAILSTRIX_RELEASE}" }
+}
+# mailstrix:testing — the default branch (main) built from source, with the
+# latest public rulesets (CACHEBUST re-pulls them every daily run). :latest and
+# :<version> above stay on the newest published release. Built straight from
+# the public git repo, so it always tracks main and never the src/mailstrix pin.
+# amd64 only: Dockerfile compiles Go + static libyara, far too slow under QEMU.
+target "debian-mailstrix-testing" {
+    inherits = ["_meta"]
+   tags = ["docker.io/eilandert/mailstrix:testing"]
+   context = "https://github.com/myguard-labs/mailstrix.git#main"
+   dockerfile = "docker/Dockerfile"
+   target = "final"
+   platforms = ["linux/amd64"]
+   args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing" }
 }
 target "debian-sitewarmup" {
     inherits = ["_meta"]
