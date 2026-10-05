@@ -42,6 +42,7 @@ RUN set -ex ;\
     # (mlkem/sntrup) and curve25519. Removing it lets the package defaults win.
     rm -f /etc/ssh/sshd_config.d/10-algorithms-ciphers.conf ;\
     addgroup ssh-users && usermod -L -a -G ssh-users aptly ;\
+    chage -M -1 aptly ;\
     # Make `docker exec -it <id> bash` land as the unprivileged aptly user
     # instead of root. Guards: only for interactive shells, only once (no
     # re-entry loop), and skippable via APTLY_ROOT_SHELL=1 or `-u root`. \
@@ -58,6 +59,7 @@ RUN set -ex ;\
     apt-get -y autoremove && apt-get -y autoclean && rm -rf /var/lib/apt/lists/*
 
 COPY examples /aptly.orig/examples
+COPY --chmod=0644 sshd-key-only.conf /usr/local/share/aptly/sshd-key-only.conf
 COPY --chmod=0755 aptly-queue-worker.sh /usr/local/bin/aptly-queue-worker.sh
 COPY --chmod=0755 ensure-queue-worker.sh /usr/local/bin/ensure-queue-worker.sh
 COPY nginx.conf /etc/nginx/nginx.conf

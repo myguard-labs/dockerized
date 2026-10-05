@@ -25,6 +25,8 @@ then
     rm -rf /etc/ssh/*
     cp -rp /etc/ssh.orig/* /etc/ssh
 fi
+install -D -m 0644 /usr/local/share/aptly/sshd-key-only.conf /etc/ssh/sshd_config.d/01-key-only.conf
+chage -M -1 aptly
 #create sshd keys if needed (absent on first run)
 bash /ssh-createkeys.sh 1>/dev/null
 chmod 600 /etc/ssh/*key
