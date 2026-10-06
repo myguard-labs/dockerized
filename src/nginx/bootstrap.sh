@@ -210,16 +210,21 @@ while [ 1 ]; do
 done &
 
 # Setup the MALLOC of choice.
-case ${MALLOC} in
-    mimalloc)
-        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc-secure.so
-        ;;
-    none)
-        unset LD_PRELOAD
-        ;;
-    *|jemalloc)
-        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
-        ;;
+# Resolve allocator SONAMEs using this image's native loader cache.
+case "${MALLOC:-jemalloc}" in
+    mimalloc) malloc_lib=libmimalloc-secure.so.3 ;;
+    none)     malloc_lib= ;;
+    *)        malloc_lib=libjemalloc.so.2 ;;
 esac
+unset LD_PRELOAD
+if [ -n "$malloc_lib" ]; then
+    LD_PRELOAD="$(ldconfig -p 2>/dev/null | awk -v lib="$malloc_lib" '$1 == lib { print $NF; exit }')"
+fi
+if [ -n "${LD_PRELOAD:-}" ]; then
+    export LD_PRELOAD
+else
+    unset LD_PRELOAD
+fi
+# End allocator selection.
 
 exec /usr/sbin/nginx -g 'daemon off;'

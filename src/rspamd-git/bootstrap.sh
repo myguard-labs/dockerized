@@ -2,24 +2,22 @@
 
 echo "[RSPAMD] This docker image can be found on https://hub.docker.com/u/eilandert and https://github.com/myguard-labs/dockerized"
 
-case ${MALLOC} in
-    jemalloc)
-        if [ -f /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 ]; then
-        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
-        fi
-        ;;
-    mimalloc)
-        if [ -f /usr/lib/x86_64-linux-gnu/libmimalloc-secure.so ]; then
-        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc-secure.so
-        fi
-        ;;
-    none)
-        unset LD_PRELOAD
-        ;;
-    *)
-	unset LD_PRELOAD
-        ;;
+# Resolve allocator SONAMEs using this image's native loader cache.
+case "${MALLOC:-none}" in
+    jemalloc) malloc_lib=libjemalloc.so.2 ;;
+    mimalloc) malloc_lib=libmimalloc-secure.so.3 ;;
+    *)        malloc_lib= ;;
 esac
+unset LD_PRELOAD
+if [ -n "$malloc_lib" ]; then
+    LD_PRELOAD="$(ldconfig -p 2>/dev/null | awk -v lib="$malloc_lib" '$1 == lib { print $NF; exit }')"
+fi
+if [ -n "${LD_PRELOAD:-}" ]; then
+    export LD_PRELOAD
+else
+    unset LD_PRELOAD
+fi
+# End allocator selection.
 
 CHECK="/usr/local/etc/rspamd/rspamd.conf"
 if [ -f ${CHECK} ]; then

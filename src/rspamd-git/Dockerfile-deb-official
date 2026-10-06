@@ -5,17 +5,17 @@ LABEL org.opencontainers.image.source="https://github.com/myguard-labs/dockerize
 
 LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>"
 ENV     DEBIAN_FRONTEND="noninteractive"
-ENV     DIST=bullseye
+ENV     DIST=trixie
 
 COPY --chmod=0755 bootstrap.sh /bootstrap.sh
 COPY wait-for-it_211228.deb /tmp/wait-for-it.deb
 
-RUN \
+RUN set -eu ;\
     echo 'man-db man-db/auto-update boolean false'|debconf-set-selections ;\
     dpkg -i /tmp/wait-for-it.deb ;\
     apt-get -y update ;\
     apt-get --no-install-recommends -y install ssl-cert ca-certificates tzdata ;\
-    echo "deb [arch=amd64 trusted=yes] http://rspamd.com/apt-stable/ $DIST main" |  tee /etc/apt/sources.list.d/rspamd.list ;\
+    echo "deb [arch=$(dpkg --print-architecture) trusted=yes] http://rspamd.com/apt-stable/ $DIST main" |  tee /etc/apt/sources.list.d/rspamd.list ;\
     apt-get -y update ;\
     apt-get -y upgrade ;\
     apt-get --no-install-recommends -y install \

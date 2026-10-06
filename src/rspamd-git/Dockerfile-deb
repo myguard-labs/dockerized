@@ -5,13 +5,13 @@ LABEL org.opencontainers.image.source="https://github.com/myguard-labs/dockerize
 
 LABEL maintainer="Thijs Eilander <eilander@myguard.nl>"
 ENV     DEBIAN_FRONTEND="noninteractive"
-ENV     LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc-secure.so
+ENV     LD_PRELOAD=libmimalloc-secure.so.3
 ENV     DIST=trixie
 
 COPY --chmod=0755 bootstrap.sh /bootstrap.sh
 RUN apt-get -y update ;\
     apt-get --no-install-recommends -y install ca-certificates ;\
-    echo "deb [arch=amd64 trusted=yes] http://rspamd.com/apt-stable/ $DIST main" \
+    echo "deb [arch=$(dpkg --print-architecture) trusted=yes] http://rspamd.com/apt-stable/ $DIST main" \
       | tee /etc/apt/sources.list.d/rspamd.list ;\
     apt-get -y update ;\
     apt-get --no-install-recommends -y install \

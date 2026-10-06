@@ -156,17 +156,22 @@ if [ -f /run/apache2/apache2.pid ]; then
     rm /run/apache2/apache2.pid
 fi
 
-case ${MALLOC} in
-    jemalloc)
-        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
-        ;;
-    mimalloc)
-        export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc-secure.so
-        ;;
-    *|none)
-        unset LD_PRELOAD
-        ;;
+# Resolve allocator SONAMEs using this image's native loader cache.
+case "${MALLOC:-none}" in
+    jemalloc) malloc_lib=libjemalloc.so.2 ;;
+    mimalloc) malloc_lib=libmimalloc-secure.so.3 ;;
+    *)        malloc_lib= ;;
 esac
+unset LD_PRELOAD
+if [ -n "$malloc_lib" ]; then
+    LD_PRELOAD="$(ldconfig -p 2>/dev/null | awk -v lib="$malloc_lib" '$1 == lib { print $NF; exit }')"
+fi
+if [ -n "${LD_PRELOAD:-}" ]; then
+    export LD_PRELOAD
+else
+    unset LD_PRELOAD
+fi
+# End allocator selection.
 
 echo "Starting Apache..."
 exec /usr/sbin/apache2ctl -DFOREGROUND

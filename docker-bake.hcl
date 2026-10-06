@@ -3,6 +3,10 @@
 #     docker buildx bake nginx --push
 variable "VCS_REF"    { default = "unknown" }
 variable "BUILD_DATE" { default = "unknown" }
+# Every published image includes both architectures. For a local single-arch
+# build (including --load on classic Docker stores), set PLATFORMS=linux/amd64
+# or PLATFORMS=linux/arm64.
+variable "PLATFORMS" { default = "linux/amd64,linux/arm64" }
 # yarad's own source version (git describe of src/mailstrix), baked into the
 # binary's main.version and surfaced on its /version endpoint. daily.sh exports
 # it; defaults to "dev" for an ad-hoc build that doesn't set it.
@@ -23,6 +27,7 @@ variable "MAILSTRIX_MAIN_REF" { default = "main" }
 # it. The `labels` map is stamped at build time by buildkit regardless of the
 # Dockerfile — no per-image ARG/LABEL edit needed.
 target "_meta" {
+    platforms = split(",", PLATFORMS)
     args = {
         VCS_REF    = "${VCS_REF}"
         BUILD_DATE = "${BUILD_DATE}"
@@ -62,8 +67,8 @@ variable "PHP_MATRIX" {
 
 variable "DISTRO_MATRIX" {
   default = [
-    { distro = "ubuntu", pfx = "",     dsuf = "ubu", base = "ubuntu-base", basetag = "docker.io/eilandert/ubuntu-base:rolling" },
-    { distro = "debian", pfx = "deb-", dsuf = "deb", base = "debian-base", basetag = "docker.io/eilandert/debian-base:stable" },
+    { distro = "ubuntu", pfx = "",     dsuf = "ubu", base = "ubuntu-base", basetag = "eilandert/ubuntu-base:rolling" },
+    { distro = "debian", pfx = "deb-", dsuf = "deb", base = "debian-base", basetag = "eilandert/debian-base:stable" },
   ]
 }
 
@@ -92,7 +97,7 @@ target "gen-nginx-php" {
     "docker.io/eilandert/nginx-modsecurity3-pagespeed:${tgt.pfx}php${php.v}",
     "docker.io/eilandert/nginx:${tgt.pfx}php${php.v}",
   ]
-  contexts = { "docker.io/eilandert/php-fpm:${tgt.pfx}${php.v}" = "target:${tgt.distro}-phpfpm${php.nn}" }
+  contexts = { "eilandert/php-fpm:${tgt.pfx}${php.v}" = "target:${tgt.distro}-phpfpm${php.nn}" }
 }
 
 target "gen-angie-php" {
@@ -102,7 +107,7 @@ target "gen-angie-php" {
   context = "src/angie"
   dockerfile = "Dockerfile-php${php.nn}-${tgt.dsuf}"
   tags = ["docker.io/eilandert/angie:${tgt.pfx}php${php.v}"]
-  contexts = { "docker.io/eilandert/php-fpm:${tgt.pfx}${php.v}" = "target:${tgt.distro}-phpfpm${php.nn}" }
+  contexts = { "eilandert/php-fpm:${tgt.pfx}${php.v}" = "target:${tgt.distro}-phpfpm${php.nn}" }
 }
 
 target "gen-apache" {
@@ -117,7 +122,7 @@ target "gen-apache" {
   ] : [
     "docker.io/eilandert/apache-phpfpm:${tgt.pfx}${php.v}",
   ]
-  contexts = { "docker.io/eilandert/php-fpm:${tgt.pfx}${php.v}" = "target:${tgt.distro}-phpfpm${php.nn}" }
+  contexts = { "eilandert/php-fpm:${tgt.pfx}${php.v}" = "target:${tgt.distro}-phpfpm${php.nn}" }
 }
 
 
@@ -365,7 +370,7 @@ target "debian-angie-cms" {
     # `compose pull` on the host tracks the daily rebuild.
     tags = ["docker.io/eilandert/angie-cms:debian", "docker.io/eilandert/angie-cms:debian-s6", "docker.io/eilandert/angie-cms:latest"]
     contexts = {
-        "docker.io/eilandert/angie:deb-php8.5" = "target:debian-angie-php85"
+        "eilandert/angie:deb-php8.5" = "target:debian-angie-php85"
     }
 }
 
@@ -388,7 +393,7 @@ target "ubuntu-multiphp" {
     tags = ["docker.io/eilandert/php-fpm:multi"]
     context = "src/php-fpm"
     dockerfile = "Dockerfile-multi-ubu"
-    contexts = { "docker.io/eilandert/ubuntu-base:rolling" = "target:ubuntu-base" }
+    contexts = { "eilandert/ubuntu-base:rolling" = "target:ubuntu-base" }
 }
 
 target "debian-multiphp" {
@@ -396,7 +401,7 @@ target "debian-multiphp" {
     tags = ["docker.io/eilandert/php-fpm:deb-multi"]
     context = "src/php-fpm"
     dockerfile = "Dockerfile-multi-deb"
-    contexts = { "docker.io/eilandert/debian-base:stable" = "target:debian-base" }
+    contexts = { "eilandert/debian-base:stable" = "target:debian-base" }
 }
 
 target "debian-mariadb" {
@@ -420,7 +425,7 @@ target "debian-nginx" {
     tags = ["docker.io/eilandert/nginx-modsecurity3-pagespeed:deb-latest", "docker.io/eilandert/nginx:deb-latest"]
     context = "src/nginx"
     dockerfile = "Dockerfile-deb"
-    contexts = { "docker.io/eilandert/debian-base:stable" = "target:debian-base" }
+    contexts = { "eilandert/debian-base:stable" = "target:debian-base" }
 }
 
 target "ubuntu-nginx" {
@@ -428,7 +433,7 @@ target "ubuntu-nginx" {
     tags = ["docker.io/eilandert/nginx-modsecurity3-pagespeed:latest", "docker.io/eilandert/nginx:latest"]
     context = "src/nginx"
     dockerfile = "Dockerfile-ubu"
-    contexts = { "docker.io/eilandert/ubuntu-base:rolling" = "target:ubuntu-base" }
+    contexts = { "eilandert/ubuntu-base:rolling" = "target:ubuntu-base" }
 }
 
 target "ubuntu-nginx-multi" {
@@ -436,7 +441,7 @@ target "ubuntu-nginx-multi" {
     tags = ["docker.io/eilandert/nginx-modsecurity3-pagespeed:multi", "docker.io/eilandert/nginx:multi"]
     context = "src/nginx"
     dockerfile = "Dockerfile-multi-ubu"
-    contexts = { "docker.io/eilandert/php-fpm:multi" = "target:ubuntu-multiphp" }
+    contexts = { "eilandert/php-fpm:multi" = "target:ubuntu-multiphp" }
 }
 
 target "debian-nginx-multi" {
@@ -444,7 +449,7 @@ target "debian-nginx-multi" {
     tags = ["docker.io/eilandert/nginx-modsecurity3-pagespeed:deb-multi", "docker.io/eilandert/nginx:deb-multi"]
     context = "src/nginx"
     dockerfile = "Dockerfile-multi-deb"
-    contexts = { "docker.io/eilandert/php-fpm:deb-multi" = "target:debian-multiphp" }
+    contexts = { "eilandert/php-fpm:deb-multi" = "target:debian-multiphp" }
 }
 
 target "debian-apache-multiphp" {
@@ -452,7 +457,7 @@ target "debian-apache-multiphp" {
     tags = ["docker.io/eilandert/apache-phpfpm:deb-multi"]
     context = "src/apache-phpfpm"
     dockerfile = "Dockerfile-multi-deb"
-    contexts = { "docker.io/eilandert/php-fpm:deb-multi" = "target:debian-multiphp" }
+    contexts = { "eilandert/php-fpm:deb-multi" = "target:debian-multiphp" }
 }
 
 target "ubuntu-apache-multiphp" {
@@ -460,7 +465,7 @@ target "ubuntu-apache-multiphp" {
     tags = ["docker.io/eilandert/apache-phpfpm:multi"]
     context = "src/apache-phpfpm"
     dockerfile = "Dockerfile-multi-ubu"
-    contexts = { "docker.io/eilandert/php-fpm:multi" = "target:ubuntu-multiphp" }
+    contexts = { "eilandert/php-fpm:multi" = "target:ubuntu-multiphp" }
 }
 
 
@@ -620,7 +625,6 @@ target "debian-mailstrix" {
    tags = notequal("", MAILSTRIX_RELEASE) ? ["docker.io/eilandert/mailstrix:latest", "docker.io/eilandert/mailstrix:${MAILSTRIX_RELEASE}"] : ["docker.io/eilandert/mailstrix:latest"]
    context = "src/mailstrix"
    dockerfile = "docker/Dockerfile.release"
-   platforms = ["linux/amd64", "linux/arm64"]
    # VERSION = the release tag whose per-arch binaries Dockerfile.release pulls.
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "${MAILSTRIX_RELEASE}" }
 }
@@ -628,7 +632,8 @@ target "debian-mailstrix" {
 # latest public rulesets (CACHEBUST re-pulls them every daily run). :latest and
 # :<version> above stay on the newest published release. Built straight from
 # the public git repo, so it always tracks main and never the src/mailstrix pin.
-# amd64 only: Dockerfile compiles Go + static libyara, far too slow under QEMU.
+# Compiles Go + static libyara on each target architecture; native ARM64 workers
+# are preferable to QEMU for this source build.
 target "debian-mailstrix-testing" {
     inherits = ["_meta"]
    tags = ["docker.io/eilandert/mailstrix:testing"]
@@ -638,7 +643,6 @@ target "debian-mailstrix-testing" {
    # The inherited revision label names the dockerized commit; this image is
    # built from mailstrix, so label it with the mailstrix commit instead.
    labels = { "org.opencontainers.image.revision" = MAILSTRIX_MAIN_REF, "org.opencontainers.image.source" = "https://github.com/myguard-labs/mailstrix" }
-   platforms = ["linux/amd64"]
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing" }
 }
 target "debian-sitewarmup" {
@@ -659,7 +663,7 @@ target "debian-vimbadmin" {
    tags = ["docker.io/eilandert/vimbadmin:debian", "docker.io/eilandert/vimbadmin:latest"]
    context = "src/vimbadmin"
    dockerfile = "Dockerfile"
-   contexts = { "docker.io/eilandert/debian-base:stable" = "target:debian-base" }
+   contexts = { "eilandert/debian-base:stable" = "target:debian-base" }
 }
 target "debian-openssh" {
     inherits = ["_meta"]
@@ -682,7 +686,7 @@ target "debian-angie" {
     tags = ["docker.io/eilandert/angie:deb-latest"]
     context = "src/angie"
     dockerfile = "Dockerfile-deb"
-    contexts = { "docker.io/eilandert/debian-base:stable" = "target:debian-base" }
+    contexts = { "eilandert/debian-base:stable" = "target:debian-base" }
 }
 
 target "ubuntu-angie" {
@@ -690,7 +694,7 @@ target "ubuntu-angie" {
     tags = ["docker.io/eilandert/angie:latest"]
     context = "src/angie"
     dockerfile = "Dockerfile-ubu"
-    contexts = { "docker.io/eilandert/ubuntu-base:rolling" = "target:ubuntu-base" }
+    contexts = { "eilandert/ubuntu-base:rolling" = "target:ubuntu-base" }
 }
 
 target "ubuntu-angie-multi" {
@@ -698,7 +702,7 @@ target "ubuntu-angie-multi" {
     tags = ["docker.io/eilandert/angie:multi"]
     context = "src/angie"
     dockerfile = "Dockerfile-multi-ubu"
-    contexts = { "docker.io/eilandert/php-fpm:multi" = "target:ubuntu-multiphp" }
+    contexts = { "eilandert/php-fpm:multi" = "target:ubuntu-multiphp" }
 }
 
 target "debian-angie-multi" {
@@ -706,7 +710,7 @@ target "debian-angie-multi" {
     tags = ["docker.io/eilandert/angie:deb-multi"]
     context = "src/angie"
     dockerfile = "Dockerfile-multi-deb"
-    contexts = { "docker.io/eilandert/php-fpm:deb-multi" = "target:debian-multiphp" }
+    contexts = { "eilandert/php-fpm:deb-multi" = "target:debian-multiphp" }
 }
 
 # Cache is applied per-invocation by the orchestrator via:

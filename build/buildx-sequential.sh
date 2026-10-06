@@ -25,6 +25,10 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# QEMU source builds need more time than native builds; keep hung builds bounded.
+# GNU timeout duration; set 0 to disable the limit for an exhaustive local run.
+BUILD_TIMEOUT="${BUILD_TIMEOUT:-4h}"
+
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -130,6 +134,7 @@ cd "$PROJECT_ROOT"
 if [[ -x "$SCRIPT_DIR/check-matrix-sync.sh" ]]; then
     "$SCRIPT_DIR/check-matrix-sync.sh"
 fi
+python3 "$PROJECT_ROOT/ci/test_platforms.py"
 
 # Persistent build cache directory - shared across all targets and runs
 DEFAULT_CACHE_ROOT="${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}"
@@ -267,8 +272,8 @@ for LAYER in "${LAYERS[@]}"; do
         TARGET_LOG="/tmp/buildx-target-$TARGET.log"
         rm -f "$TARGET_LOG"
         
-        # Build single target (30 minute timeout per target)
-        if timeout 1800 docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
+        # ARM64 builds under QEMU, especially source builds, can exceed 30 minutes.
+        if timeout --kill-after=60s "$BUILD_TIMEOUT" docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
         --builder "$BUILDER_NAME" \
         --set "*.cache-from=type=local,src=$CACHE_DIR" \
         --set "*.cache-to=type=local,dest=$CACHE_DIR,mode=max" \
@@ -282,10 +287,11 @@ for LAYER in "${LAYERS[@]}"; do
         else
             EXIT_CODE=$?
             TARGET_ELAPSED=$(($(date +%s) - TARGET_START_TIME))
-            if [ $EXIT_CODE -eq 124 ]; then
-                log_error "  ✗ TIMEOUT (exceeded 30 minutes / $(format_time $TARGET_ELAPSED))"
+            if [ "$EXIT_CODE" -eq 124 ]; then
+                log_error "  ✗ TIMEOUT (limit $BUILD_TIMEOUT / $(format_time "$TARGET_ELAPSED"))"
+                printf '\nTIMEOUT: build exceeded %s\n' "$BUILD_TIMEOUT" >> "$TARGET_LOG"
             else
-                log_error "  ✗ FAILED ($(format_time $TARGET_ELAPSED) exit code: $EXIT_CODE)"
+                log_error "  ✗ FAILED ($(format_time "$TARGET_ELAPSED") exit code: $EXIT_CODE)"
             fi
             
             # Show full log path and error excerpt
@@ -350,9 +356,9 @@ SUMMARY_FILE="/tmp/buildx-summary-$(date +%s).txt"
             # Show error details from log
             TARGET_LOG="/tmp/buildx-target-$target.log"
             if [ -f "$TARGET_LOG" ]; then
-                if grep -q "TIMEOUT\|timeout" "$TARGET_LOG" 2>/dev/null; then
-                    echo "  └─ Reason: Build timeout (exceeded 30 minutes)"
-                    elif grep -q "permission denied" "$TARGET_LOG" 2>/dev/null; then
+                if grep -q '^TIMEOUT: build exceeded ' "$TARGET_LOG"; then
+                    echo "  └─ Reason: Build timeout (limit $BUILD_TIMEOUT)"
+                elif grep -q "permission denied" "$TARGET_LOG" 2>/dev/null; then
                     echo "  └─ Reason: Permission denied (Docker daemon access)"
                     elif grep -q "ERROR\|error:" "$TARGET_LOG" 2>/dev/null; then
                     echo "  └─ Error details:"
@@ -393,9 +399,9 @@ else
         # Show error details from log
         TARGET_LOG="/tmp/buildx-target-$target.log"
         if [ -f "$TARGET_LOG" ]; then
-            if grep -q "TIMEOUT\|timeout" "$TARGET_LOG" 2>/dev/null; then
-                echo "  └─ Reason: Build timeout (exceeded 30 minutes)"
-                elif grep -q "permission denied" "$TARGET_LOG" 2>/dev/null; then
+            if grep -q '^TIMEOUT: build exceeded ' "$TARGET_LOG"; then
+                echo "  └─ Reason: Build timeout (limit $BUILD_TIMEOUT)"
+            elif grep -q "permission denied" "$TARGET_LOG" 2>/dev/null; then
                 echo "  └─ Reason: Permission denied (Docker daemon access)"
                 elif grep -q "ERROR\|error:" "$TARGET_LOG" 2>/dev/null; then
                 echo "  └─ Error details:"

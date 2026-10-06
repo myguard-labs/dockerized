@@ -183,11 +183,18 @@ if [ ! -f "${TICKET_KEY}" ]; then
 fi
 
 # MALLOC selection → ld_preload file the angie + php-fpm longruns source.
+# Resolve allocator SONAMEs using this image's native loader cache.
 case "${MALLOC:-jemalloc}" in
-    mimalloc) echo "/usr/lib/x86_64-linux-gnu/libmimalloc-secure.so" > /run/angie/ld_preload ;;
-    none)     : > /run/angie/ld_preload ;;
-    *)        echo "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" > /run/angie/ld_preload ;;
+    mimalloc) malloc_lib=libmimalloc-secure.so.3 ;;
+    none)     malloc_lib= ;;
+    *)        malloc_lib=libjemalloc.so.2 ;;
 esac
+malloc_preload=
+if [ -n "$malloc_lib" ]; then
+    malloc_preload="$(ldconfig -p 2>/dev/null | awk -v lib="$malloc_lib" '$1 == lib { print $NF; exit }')"
+fi
+printf '%s' "$malloc_preload" > /run/angie/ld_preload
+# End allocator selection.
 
 echo "[ANGIE] init-bootstrap complete; handing off to s6-supervised services."
 exit 0

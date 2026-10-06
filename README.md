@@ -61,6 +61,18 @@ dockerized/
 
 Prereqs: Docker with Buildx (`docker buildx version`), Linux, network access to docker.io for base layers. Builds run sequentially so a laptop is fine — they're just slow.
 
+Every Bake target builds for both `linux/amd64` and `linux/arm64` by default.
+The builder must support both architectures through native workers or QEMU.
+Publishing with `--push` creates a multi-platform image for each tag. For a local
+single-platform build, set `PLATFORMS=linux/amd64` or `PLATFORMS=linux/arm64`;
+use this override with `LOAD=1` on Docker stores that cannot load image indexes.
+Run `python3 -m unittest discover -s ci -p 'test_platforms.py'` to check every
+expanded target's platforms without building or publishing images.
+
+The sequential builder allows four hours per target for builds under emulation.
+Override `BUILD_TIMEOUT` with a GNU `timeout` duration, or use `BUILD_TIMEOUT=0`
+for a local validation run without a deadline.
+
 ```bash
 # Regenerate Dockerfiles from templates (after editing src/<component>/Dockerfile-template*)
 ./generate.sh

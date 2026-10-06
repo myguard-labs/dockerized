@@ -5,7 +5,7 @@ LABEL   org.opencontainers.image.authors="eilandert" \
         org.opencontainers.image.source="https://github.com/myguard-labs/dockerized" \
         maintainer="Thijs Eilander <eilander@myguard.nl>"
 ENV     DEBIAN_FRONTEND="noninteractive" \
-        LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc-secure.so
+        LD_PRELOAD=libmimalloc-secure.so.3
 COPY --chmod=0755 bootstrap.sh /bootstrap.sh
 COPY    syslog-ng.conf /etc/syslog-ng
 
