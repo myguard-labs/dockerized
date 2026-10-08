@@ -36,3 +36,29 @@ mailstrix_source_version() {
     local src_dir="$1"
     git -C "$src_dir" describe --tags --always 2>/dev/null || echo dev
 }
+
+# image_built_from <commit-sha> <image-ref> <platform>...
+# True only when <commit-sha> is a full 40-hex SHA, at least one platform is
+# required, the published image has every required platform, and each of its
+# platforms is labelled org.opencontainers.image.revision=<commit-sha>.
+# Anything else (a symbolic ref like "main", an unreachable registry, a
+# mixed-revision manifest, a missing architecture, malformed inspect output)
+# returns false so the caller builds. buildx-sequential.sh uses it to skip
+# rebuilding mailstrix:testing when main has not moved.
+image_built_from() {
+    local sha="$1" image="$2" inspect_output
+    shift 2
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    (( $# > 0 )) || return 1
+    inspect_output="$(docker buildx imagetools inspect "$image" --format '{{json .Image}}' 2>/dev/null)" \
+        || return 1
+    # A single-platform image is one config object; key it by its own
+    # os/architecture[/variant] so it compares like a multi-platform map.
+    jq -e --arg sha "$sha" '
+        (if has("config")
+         then {(.os + "/" + .architecture + (if .variant then "/" + .variant else "" end)): .}
+         else . end) as $imgs
+        | ($imgs | map(.config.Labels["org.opencontainers.image.revision"] // "") | unique) == [$sha]
+          and ($ARGS.positional - ($imgs | keys) | length) == 0' \
+        --args "$@" <<<"$inspect_output" >/dev/null 2>&1
+}

@@ -629,7 +629,10 @@ target "debian-mailstrix" {
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "${MAILSTRIX_RELEASE}" }
 }
 # mailstrix:testing — the default branch (main) built from source, with the
-# latest public rulesets (CACHEBUST re-pulls them every daily run). :latest and
+# latest public rulesets at build time. The daily only rebuilds it when main has
+# moved past the published image's revision label (buildx-sequential.sh;
+# MAILSTRIX_TESTING_FORCE=1 overrides); strixd's own rules poll keeps a running
+# container's rules fresh in between. :latest and
 # :<version> above stay on the newest published release. Built straight from
 # the public git repo, so it always tracks main and never the src/mailstrix pin.
 # Compiles Go + static libyara on each target architecture; native ARM64 workers
