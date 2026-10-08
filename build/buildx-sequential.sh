@@ -203,6 +203,7 @@ echo ""
 
 FAILED=0
 SUCCESS=0
+SKIPPED=0
 TOTAL_TARGETS=0
 CURRENT_TARGET_NUM=0
 BUILD_START_TIME=$(date +%s)
@@ -266,6 +267,36 @@ for LAYER in "${LAYERS[@]}"; do
                 continue
             fi
             log_info "  mailstrix VERSION=$MAILSTRIX_RELEASE"
+        fi
+
+        # mailstrix:testing is a ~30 min source build per arch that only changes
+        # when main moves (rules refresh at runtime via strixd's daily poll).
+        # When pushing, skip it if the published image already has every
+        # platform the target builds, all labelled with the resolved main SHA.
+        # MAILSTRIX_TESTING_FORCE=1 rebuilds regardless (e.g. after changing
+        # this target's build args in docker-bake.hcl).
+        if [[ "$TARGET" == "debian-mailstrix-testing" && "$PUSH_ARG" == "--push" \
+              && "${MAILSTRIX_TESTING_FORCE:-0}" != "1" ]]; then
+            # Inspect exactly the tag and platforms bake will publish. Check each
+            # producer's status; on any failure the platform list stays empty
+            # and image_built_from refuses to skip.
+            TESTING_IMAGE=""
+            TESTING_PLATFORMS=()
+            if TESTING_BAKE="$(docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
+                    --print "$TARGET" 2>/dev/null)" \
+                && TESTING_IMAGE="$(jq -r '.target[].tags[0] // empty' <<<"$TESTING_BAKE")" \
+                && TESTING_PLATFORM_LIST="$(jq -r '[.target[].platforms[]?] | join(" ")' \
+                    <<<"$TESTING_BAKE")"; then
+                read -r -a TESTING_PLATFORMS <<<"$TESTING_PLATFORM_LIST"
+            fi
+            if [[ -n "$TESTING_IMAGE" ]] \
+                && image_built_from "${MAILSTRIX_MAIN_REF:-}" "$TESTING_IMAGE" \
+                    "${TESTING_PLATFORMS[@]}"; then
+                log_info "  ↷ SKIPPED — $TESTING_IMAGE already built from main ${MAILSTRIX_MAIN_REF:0:7} (${TESTING_PLATFORMS[*]})"
+                SKIPPED=$((SKIPPED+1))
+                echo ""
+                continue
+            fi
         fi
         
         # Individual log per target
@@ -337,12 +368,13 @@ SUMMARY_FILE="/tmp/buildx-summary-$(date +%s).txt"
     echo "========================================="
     echo "Successful: $SUCCESS/$TOTAL_TARGETS"
     echo "Failed: $FAILED/$TOTAL_TARGETS"
+    echo "Skipped (unchanged): $SKIPPED/$TOTAL_TARGETS"
     BUILD_ELAPSED=$(($(date +%s) - BUILD_START_TIME))
     echo "Total Time: $(format_time $BUILD_ELAPSED)"
     echo ""
     
-    if [ $SUCCESS -eq $TOTAL_TARGETS ]; then
-        echo "✓ All targets built successfully!"
+    if [ $((SUCCESS + SKIPPED)) -eq $TOTAL_TARGETS ]; then
+        echo "✓ All targets built successfully (or skipped as unchanged)!"
     else
         echo ""
         echo "========================================="
@@ -381,11 +413,12 @@ BUILD_ELAPSED=$(($(date +%s) - BUILD_START_TIME))
 echo "========================================="
 echo -e "  ${GREEN}Successful${NC}: $SUCCESS/$TOTAL_TARGETS"
 echo -e "  ${RED}Failed${NC}: $FAILED/$TOTAL_TARGETS"
+echo -e "  ${YELLOW}Skipped (unchanged)${NC}: $SKIPPED/$TOTAL_TARGETS"
 echo -e "  ${BLUE}Total Time${NC}: $(format_time $BUILD_ELAPSED)"
 echo ""
 
-if [ $SUCCESS -eq $TOTAL_TARGETS ]; then
-    log_info "✓ All targets built successfully!"
+if [ $((SUCCESS + SKIPPED)) -eq $TOTAL_TARGETS ]; then
+    log_info "✓ All targets built successfully (or skipped as unchanged)!"
 else
     echo ""
     echo "========================================="
