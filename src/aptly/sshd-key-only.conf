@@ -1,0 +1,3 @@
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes

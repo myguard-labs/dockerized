@@ -25,6 +25,13 @@ then
     rm -rf /etc/ssh/*
     cp -rp /etc/ssh.orig/* /etc/ssh
 fi
+# OpenSSH uses the first value it reads. Put this before any persisted setting
+# or Include line, so an older bind-mounted config cannot enable passwords.
+if ! grep -q '^# aptly key-only policy$' /etc/ssh/sshd_config; then
+    sed -i '1i# aptly key-only policy\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes' /etc/ssh/sshd_config
+fi
+install -D -m 0644 /usr/local/share/aptly/sshd-key-only.conf /etc/ssh/sshd_config.d/01-key-only.conf
+chage -M -1 aptly
 #create sshd keys if needed (absent on first run)
 bash /ssh-createkeys.sh 1>/dev/null
 chmod 600 /etc/ssh/*key
