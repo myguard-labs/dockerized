@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean ;\
     # PHP 8.5 from the ondrej mirror on our edge repo (fleet convention);
     # angie + php-snuffleupagus from the signed deb.myguard.nl repo (debian-base).
-    echo "deb [trusted=yes] http://edge.deb.myguard.nl:8888/mirror/ondrej-php ${DIST} main" > /etc/apt/sources.list.d/ondrej-php.list ;\
+    echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://edge.deb.myguard.nl:8888/mirror/ondrej-php ${DIST} main" > /etc/apt/sources.list.d/ondrej-php.list ;\
     apt-get update ;\
     apt-get install -y --no-install-recommends \
       angie-minimal \
