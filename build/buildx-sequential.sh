@@ -16,6 +16,8 @@ export BUILDX_BAKE_ENTITLEMENTS_FS=0
 # daily.sh — single source of truth.
 # shellcheck source=lib-release.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib-release.sh"
+# shellcheck source=lib-runlogs.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib-runlogs.sh"
 
 # Colors for output
 RED='\033[0;31m'
@@ -142,6 +144,18 @@ CACHE_DIR="${BUILDX_CACHE_DIR:-$DEFAULT_CACHE_ROOT/dockerized-buildx}"
 mkdir -p "$CACHE_DIR"
 log_info "Using build cache: $CACHE_DIR"
 
+# The docker CLI injects its configured proxy into every build; when that proxy
+# is down each apt step fails with "Unable to connect" and the run produces
+# dozens of misleading per-target failures. Stop before building instead.
+BUILD_PROXY="$(docker_build_proxy)"
+if ! check_build_proxy "$BUILD_PROXY"; then
+    log_error "Build proxy $BUILD_PROXY is down (docker config proxies.default) — start it and rerun"
+    exit 1
+fi
+
+# Drop the previous run's per-target logs so `tail -f` shows only this run.
+clear_target_logs /tmp
+
 # Create (or reuse) a named buildx builder. Named so we can clean up exactly
 # what we created, and so concurrent runs don't trip over each other.
 BUILDER_NAME="${BUILDX_BUILDER:-dockerized-build}"
@@ -208,6 +222,7 @@ TOTAL_TARGETS=0
 CURRENT_TARGET_NUM=0
 BUILD_START_TIME=$(date +%s)
 declare -a FAILED_TARGETS=()
+declare -a SUCCEEDED_TARGETS=()
 
 # Calculate total targets
 for LAYER in "${LAYERS[@]}"; do
@@ -312,6 +327,7 @@ for LAYER in "${LAYERS[@]}"; do
         ${PUSH_ARG} $TARGET > "$TARGET_LOG" 2>&1; then
             
             SUCCESS=$((SUCCESS+1))
+            SUCCEEDED_TARGETS+=("$TARGET")
             TARGET_ELAPSED=$(($(date +%s) - TARGET_START_TIME))
             log_info "  ✓ SUCCESS ($(format_time $TARGET_ELAPSED))"
             
@@ -350,6 +366,9 @@ docker buildx rm "$BUILDER_NAME" 2>/dev/null || true
 if [[ "${DOCKERIZED_PRUNE:-0}" == "1" ]]; then
     docker system prune -f -a 2>/dev/null || true
 fi
+
+# Keep only failed targets' logs; successful ones carry nothing to investigate.
+prune_success_logs /tmp "${SUCCEEDED_TARGETS[@]}"
 
 # Surface aptly-sync failure in the final summary too
 if [[ "$APTLY_SYNC_OK" == "0" ]]; then
