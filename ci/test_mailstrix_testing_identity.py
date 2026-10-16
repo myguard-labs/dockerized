@@ -82,6 +82,45 @@ class ReleaseTagTest(unittest.TestCase):
             src = sh('mailstrix_source_version "$1"', str(repo)).stdout.strip()
             self.assertRegex(src, r"^v1\.2\.0-1-g[0-9a-f]{7,}$")
 
+    def test_prerelease_tags_never_win(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = make_repo(tmp, tags_after_release=())
+            git(repo, "commit", "-q", "--allow-empty", "-m", "three")
+            git(repo, "tag", "v1.3.0-rc.1")
+            for tag in ("nightly", "rules-current"):
+                git(repo, "tag", tag)
+            gh = fake_gh(tmp)
+            self.assertEqual(
+                sh('resolve_mailstrix_release "$1"', str(repo), path_prefix=gh).stdout,
+                "1.2.0",
+            )
+            src = sh('mailstrix_source_version "$1"', str(repo)).stdout.strip()
+            self.assertRegex(src, r"^v1\.2\.0-2-g[0-9a-f]{7,}$")
+
+    def test_negative_control_without_exclude_prerelease_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = make_repo(tmp, tags_after_release=())
+            git(repo, "commit", "-q", "--allow-empty", "-m", "three")
+            git(repo, "tag", "v1.3.0-rc.1")
+            gh = fake_gh(tmp)
+            mutated = Path(tmp) / "lib-mutated.sh"
+            mutated.write_text(LIB.read_text().replace(" --exclude 'v*-*'", ""))
+            self.assertNotIn("--exclude", mutated.read_text())
+            out = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f'. "{mutated}"; resolve_mailstrix_release "$1"',
+                    "_",
+                    str(repo),
+                ],
+                env=dict(os.environ, PATH=f"{gh}:{os.environ['PATH']}"),
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout
+            self.assertEqual(out, "1.3.0-rc.1")  # unguarded: prerelease wins
+
     def test_no_release_tag_yields_empty_release_and_sha_version(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = make_repo(tmp, release=False)
@@ -138,6 +177,11 @@ class MainRefTest(unittest.TestCase):
 
     def test_command_failure(self):
         self.assertEqual(self.resolve("exit 128"), "")
+
+    def test_valid_line_but_failing_git_is_empty(self):
+        self.assertEqual(
+            self.resolve(f'printf "{SHA}\\trefs/heads/main\\n"; exit 1'), ""
+        )
 
     def test_malformed(self):
         for bad in ("zzzz" + "0" * 36, SHA[:7], SHA.upper(), SHA + "00"):
@@ -217,6 +261,83 @@ class WiringTest(unittest.TestCase):
 
     def test_testing_version_format(self):
         self.assertEqual(sh('testing_version "$1"', SHA).stdout, "testing-770b6ecb521a")
+
+
+def write_docker_stub(d, labels_sha, run_out):
+    payload = d / "image.json"
+    payload.write_text(
+        json.dumps(
+            {
+                "linux/amd64": {
+                    "os": "linux",
+                    "architecture": "amd64",
+                    "config": {
+                        "Labels": {"org.opencontainers.image.revision": labels_sha}
+                    },
+                }
+            }
+        )
+    )
+    (d / "docker").write_text(
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        f'buildx) cat "{payload}";;\n'
+        f'run) printf "%s" "{run_out}";;\n'
+        "esac\n"
+    )
+    (d / "docker").chmod(0o755)
+
+
+def skip_block():
+    """The skip-unchanged `if` from buildx-sequential.sh, verbatim."""
+    text = (ROOT / "build/buildx-sequential.sh").read_text()
+    start = text.index('            if [[ "$PUSH_ARG" == "--push" && "${MAILSTRIX_TESTING_FORCE')
+    end = text.index("\n            fi\n", start) + len("\n            fi\n")
+    return text[start:end]
+
+
+def run_skip_block(block, labels_sha, run_out):
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        write_docker_stub(d, labels_sha, run_out)
+        script = (
+            f'. "{LIB}"; log_info() {{ :; }}; SKIPPED=0; PUSH_ARG=--push; '
+            f"MAILSTRIX_MAIN_REF={SHA}; TESTING_IMAGE={IMAGE}; "
+            "TESTING_PLATFORMS=(linux/amd64)\n"
+            f"for _ in 1; do\n{block}\necho BUILD\ndone"
+        )
+        return sh(script, path_prefix=tmp).stdout.strip()
+
+
+class SkipPathTest(unittest.TestCase):
+    def test_label_and_version_match_is_skipped(self):
+        out = run_skip_block(skip_block(), SHA, "strixd testing-770b6ecb521a")
+        self.assertEqual(out, "")  # `continue` before echo BUILD
+
+    def test_label_match_but_old_version_is_built(self):
+        out = run_skip_block(skip_block(), SHA, "strixd testing")
+        self.assertEqual(out, "BUILD")
+
+    def test_label_mismatch_is_built(self):
+        out = run_skip_block(skip_block(), OTHER, "strixd testing-770b6ecb521a")
+        self.assertEqual(out, "BUILD")
+
+    def test_negative_control_label_only_skips_old_version(self):
+        block = skip_block()
+        self.assertIn("verify_testing_identity", block)
+        mutated = block.replace("verify_testing_identity", "image_built_from")
+        # revision label alone would skip an image whose version is stale
+        self.assertEqual(run_skip_block(mutated, SHA, "strixd testing"), "")
+
+
+class DailyWiringTest(unittest.TestCase):
+    def test_unbound_warning_accepts_same_push_values_as_sequential(self):
+        seq = (ROOT / "build/buildx-sequential.sh").read_text()
+        daily = (ROOT / "build/daily.sh").read_text()
+        self.assertIn('"$PUSH" == "1" || "$PUSH" == "true"', seq)
+        self.assertIn(
+            'if [[ "$PUSH" == 1 || "$PUSH" == true ]] && ! is_full_sha', daily
+        )
 
 
 class IdentityTest(unittest.TestCase):

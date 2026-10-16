@@ -63,7 +63,7 @@ export MAILSTRIX_RELEASE="$(resolve_mailstrix_release "$REPO_DIR/src/mailstrix")
 # run never publishes an unbound :testing: buildx-sequential.sh skips the target.
 MAILSTRIX_MAIN_REF="$(resolve_mailstrix_main_ref)"
 export MAILSTRIX_MAIN_REF="${MAILSTRIX_MAIN_REF:-main}"
-if [[ "$PUSH" == 1 ]] && ! is_full_sha "$MAILSTRIX_MAIN_REF"; then
+if [[ "$PUSH" == 1 || "$PUSH" == true ]] && ! is_full_sha "$MAILSTRIX_MAIN_REF"; then
     echo "[daily] WARN: could not resolve mailstrix main to a commit SHA (git ls-remote failed/empty) — debian-mailstrix-testing will be skipped this run" >&2
     python3 "$DISCORD" message "🐳 dockerized daily: mailstrix:testing skipped" "Could not resolve mailstrix main (git ls-remote failed or malformed); :testing was not rebuilt to avoid publishing an unbound image." || true
 fi

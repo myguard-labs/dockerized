@@ -289,8 +289,11 @@ for LAYER in "${LAYERS[@]}"; do
         # when main moves (rules refresh at runtime via strixd's daily poll).
         # When pushing, never publish it unbound: MAILSTRIX_MAIN_REF must be a
         # 40-hex SHA or the target is skipped with a warning (even with FORCE).
-        # Otherwise skip it if the published image already has every platform the
-        # target builds, all labelled with the resolved main SHA.
+        # Otherwise skip it only if the published image has the FULL identity:
+        # every platform labelled with the resolved main SHA AND `strixd version`
+        # == testing-<sha12> (verify_testing_identity). A revision label alone is
+        # not enough: an image published before VERSION was pinned, or one that
+        # failed the post-push check, may carry the current SHA yet be wrong.
         # MAILSTRIX_TESTING_FORCE=1 rebuilds regardless (e.g. after changing
         # this target's build args in docker-bake.hcl).
         TESTING_IMAGE=""
@@ -307,7 +310,7 @@ for LAYER in "${LAYERS[@]}"; do
             esac
             # Inspect exactly the tag and platforms bake will publish. Check each
             # producer's status; on any failure the platform list stays empty
-            # and image_built_from refuses to skip.
+            # and the identity check refuses to skip.
             if [[ "$PUSH_ARG" == "--push" ]] \
                 && TESTING_BAKE="$(docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
                     --print "$TARGET" 2>/dev/null)" \
@@ -318,7 +321,7 @@ for LAYER in "${LAYERS[@]}"; do
             fi
             if [[ "$PUSH_ARG" == "--push" && "${MAILSTRIX_TESTING_FORCE:-0}" != "1" \
                   && -n "$TESTING_IMAGE" ]] \
-                && image_built_from "${MAILSTRIX_MAIN_REF:-}" "$TESTING_IMAGE" \
+                && verify_testing_identity "${MAILSTRIX_MAIN_REF:-}" "$TESTING_IMAGE" \
                     "${TESTING_PLATFORMS[@]}"; then
                 log_info "  ↷ SKIPPED — $TESTING_IMAGE already built from main ${MAILSTRIX_MAIN_REF:0:7} (${TESTING_PLATFORMS[*]})"
                 SKIPPED=$((SKIPPED+1))

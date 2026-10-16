@@ -17,15 +17,15 @@ MAILSTRIX_GH_REPO="${MAILSTRIX_GH_REPO:-myguard-labs/mailstrix}"
 # per-arch assets Dockerfile.release pulls. Prefer the latest PUBLISHED release
 # via gh — a git tag can exist (or be pushed) before its release+assets are, and
 # building from that 404s (2026-06-30). Fall back to the nearest git RELEASE tag
-# (v<digits>...; the moving prerelease tags `nightly` and `rules-current` are
-# reachable and must never win) only when gh is unavailable (no network/auth). Echoes "" if neither resolves; the
+# (v<digits>..., no prerelease suffix such as -rc.1; the moving tags `nightly`
+# and `rules-current` are reachable and must never win) only when gh is unavailable (no network/auth). Echoes "" if neither resolves; the
 # caller decides whether to skip the target (empty VERSION trips
 # Dockerfile.release's `test -n "${VERSION}"` guard and fails the build).
 resolve_mailstrix_release() {
     local src_dir="$1" ver
     ver="$(gh release view --repo "$MAILSTRIX_GH_REPO" --json tagName -q .tagName 2>/dev/null | sed 's/^v//')"
     if [[ -z "$ver" ]]; then
-        ver="$(git -C "$src_dir" describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//')"
+        ver="$(git -C "$src_dir" describe --tags --abbrev=0 --match 'v[0-9]*' --exclude 'v*-*' 2>/dev/null | sed 's/^v//')"
     fi
     printf '%s' "$ver"
 }
@@ -36,7 +36,7 @@ resolve_mailstrix_release() {
 # main.version ldflag / surfaced on its /version endpoint. Falls back to "dev".
 mailstrix_source_version() {
     local src_dir="$1"
-    git -C "$src_dir" describe --tags --always --match 'v[0-9]*' 2>/dev/null || echo dev
+    git -C "$src_dir" describe --tags --always --match 'v[0-9]*' --exclude 'v*-*' 2>/dev/null || echo dev
 }
 
 # image_built_from <commit-sha> <image-ref> <platform>...
@@ -75,8 +75,11 @@ is_full_sha() {
 # 40-hex SHA. The caller must treat "" as unbound, never as a moving ref.
 resolve_mailstrix_main_ref() {
     local out
-    out="$(git ls-remote "https://github.com/$MAILSTRIX_GH_REPO.git" refs/heads/main 2>/dev/null | cut -f1)" \
-        || out=""
+    if out="$(git ls-remote "https://github.com/$MAILSTRIX_GH_REPO.git" refs/heads/main 2>/dev/null)"; then
+        out="$(printf '%s\n' "$out" | cut -f1)"
+    else
+        out=""
+    fi
     is_full_sha "$out" && printf '%s' "$out"
     return 0
 }
