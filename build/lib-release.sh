@@ -112,10 +112,16 @@ testing_version() {
 # (image_built_from) AND a bounded amd64 `docker run` of the pulled image reports
 # `strixd testing-<sha12>`. Registry unreachable, mismatch or run failure -> false.
 verify_testing_identity() {
-    local sha="$1" image="$2" out
+    local sha="$1" image="$2" out name="dockerized-testing-identity-$$" rc
     image_built_from "$@" || return 1
     out="$(timeout 180 docker run --rm --pull always --platform linux/amd64 \
-        --label "myguard.run=dockerized-testing-identity-$$" \
-        --name "dockerized-testing-identity-$$" "$image" version 2>/dev/null)" || return 1
+        --label "myguard.run=$name" \
+        --name "$name" "$image" version 2>/dev/null)"
+    rc=$?
+    if (( rc != 0 )); then
+        # A host timeout kills only the docker client; remove the exact container.
+        docker rm -f "$name" >/dev/null 2>&1 || true
+        return 1
+    fi
     [[ "$out" == "strixd $(testing_version "$sha")" ]]
 }

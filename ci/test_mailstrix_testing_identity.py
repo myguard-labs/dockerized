@@ -205,15 +205,29 @@ class WiringTest(unittest.TestCase):
         bake = (ROOT / "docker-bake.hcl").read_text()
         self.assertIn('VERSION = "testing-${substr(MAILSTRIX_MAIN_REF, 0, 12)}"', bake)
 
+    def test_summary_counts_unbound_skip_once(self):
+        seq = (ROOT / "build/buildx-sequential.sh").read_text()
+        self.assertNotIn("Skipped (unchanged)", seq)
+        self.assertNotIn("Skipped (unbound mailstrix:testing ref)", seq)
+        self.assertIn("Skipped: $SKIPPED/$TOTAL_TARGETS", seq)
+        self.assertIn("of which unbound mailstrix:testing ref", seq)
+        # the unbound branch still feeds the overall skip total
+        self.assertIn("UNBOUND_SKIPPED=$((UNBOUND_SKIPPED+1))", seq)
+        self.assertIn("SKIPPED=$((SKIPPED+1))", seq)
+
     def test_testing_version_format(self):
         self.assertEqual(sh('testing_version "$1"', SHA).stdout, "testing-770b6ecb521a")
 
 
 class IdentityTest(unittest.TestCase):
     def verify(self, labels_sha, run_out, run_rc=0, inspect_rc=0, ref=SHA):
-        """docker stub: `buildx imagetools inspect` -> labelled image; `run` -> run_out."""
+        return self.verify_calls(labels_sha, run_out, run_rc, inspect_rc, ref)[0]
+
+    def verify_calls(self, labels_sha, run_out, run_rc=0, inspect_rc=0, ref=SHA):
+        """Return (exit code, docker argv lines recorded by the stub)."""
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
+            calls = d / "calls.log"
             payload = d / "image.json"
             payload.write_text(
                 json.dumps(
@@ -232,19 +246,23 @@ class IdentityTest(unittest.TestCase):
             )
             (d / "docker").write_text(
                 "#!/bin/sh\n"
+                f'echo "$*" >> "{calls}"\n'
                 'case "$1" in\n'
                 f'buildx) cat "{payload}"; exit {inspect_rc};;\n'
                 f'run) printf "%s" "{run_out}"; exit {run_rc};;\n'
+                "rm) exit 0;;\n"
                 "esac\n"
             )
             (d / "docker").chmod(0o755)
-            return sh(
+            rc = sh(
                 'verify_testing_identity "$@"',
                 ref,
                 IMAGE,
                 "linux/amd64",
                 path_prefix=tmp,
             ).returncode
+            recorded = calls.read_text() if calls.exists() else ""
+            return rc, recorded.splitlines()
 
     def test_match(self):
         self.assertEqual(self.verify(SHA, "strixd testing-770b6ecb521a"), 0)
@@ -268,6 +286,31 @@ class IdentityTest(unittest.TestCase):
 
     def test_unbound_ref_fails(self):
         self.assertNotEqual(self.verify("main", "strixd testing-main", ref="main"), 0)
+
+    @staticmethod
+    def run_name(calls):
+        """The --name value of the recorded `run` call (exactly one expected)."""
+        runs = [line.split() for line in calls if line.startswith("run ")]
+        assert len(runs) == 1, calls
+        argv = runs[0]
+        return argv[argv.index("--name") + 1]
+
+    def test_timeout_force_removes_named_container(self):
+        rc, calls = self.verify_calls(SHA, "", run_rc=124)
+        self.assertNotEqual(rc, 0)
+        name = self.run_name(calls)
+        self.assertRegex(name, r"^dockerized-testing-identity-\d+$")
+        self.assertIn(f"rm -f {name}", calls)
+
+    def test_run_failure_force_removes_named_container(self):
+        rc, calls = self.verify_calls(SHA, "strixd testing-770b6ecb521a", run_rc=1)
+        self.assertNotEqual(rc, 0)
+        self.assertIn(f"rm -f {self.run_name(calls)}", calls)
+
+    def test_success_does_not_remove_container(self):
+        rc, calls = self.verify_calls(SHA, "strixd testing-770b6ecb521a")
+        self.assertEqual(rc, 0)
+        self.assertFalse(any(line.startswith("rm ") for line in calls), calls)
 
 
 if __name__ == "__main__":
