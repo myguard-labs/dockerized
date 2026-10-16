@@ -646,7 +646,10 @@ target "debian-mailstrix-testing" {
    # The inherited revision label names the dockerized commit; this image is
    # built from mailstrix, so label it with the mailstrix commit instead.
    labels = { "org.opencontainers.image.revision" = MAILSTRIX_MAIN_REF, "org.opencontainers.image.source" = "https://github.com/myguard-labs/mailstrix" }
-   args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing" }
+   # VERSION is what strixd reports on /version ("version") and `strixd version`.
+   # testing-<12 hex of the main commit> keeps the channel readable while binding
+   # the identity to the commit (matches testing_version in build/lib-release.sh).
+   args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing-${substr(MAILSTRIX_MAIN_REF, 0, 12)}" }
 }
 target "debian-sitewarmup" {
     inherits = ["_meta"]
