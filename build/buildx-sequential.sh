@@ -348,8 +348,9 @@ for LAYER in "${LAYERS[@]}"; do
             # the daily alerts. Unreachable registry counts as a mismatch.
             if [[ "$TARGET" == "debian-mailstrix-testing" && "$PUSH_ARG" == "--push" ]] \
                 && ! verify_testing_identity "${MAILSTRIX_MAIN_REF:-}" "${TESTING_IMAGE:-}" \
-                    "${TESTING_PLATFORMS[@]}"; then
+                    "${TESTING_PLATFORMS[@]}" 2>>"$TARGET_LOG"; then
                 log_error "  ✗ FAILED identity check: ${TESTING_IMAGE:-?} is not main ${MAILSTRIX_MAIN_REF:0:12} ($(testing_version "${MAILSTRIX_MAIN_REF:-}"))"
+                log_error "  Full log: $TARGET_LOG"
                 printf '\nERROR: pushed image identity does not match %s\n' "${MAILSTRIX_MAIN_REF:-}" >> "$TARGET_LOG"
                 FAILED=$((FAILED+1))
                 FAILED_TARGETS+=("$TARGET")

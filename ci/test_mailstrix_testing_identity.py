@@ -346,6 +346,19 @@ class IdentityTest(unittest.TestCase):
 
     def verify_calls(self, labels_sha, run_out, run_rc=0, inspect_rc=0, ref=SHA):
         """Return (exit code, docker argv lines recorded by the stub)."""
+        rc, calls, _ = self.verify_full(labels_sha, run_out, run_rc, inspect_rc, ref)
+        return rc, calls
+
+    def verify_full(
+        self,
+        labels_sha,
+        run_out,
+        run_rc=0,
+        inspect_rc=0,
+        ref=SHA,
+        script='verify_testing_identity "$@"',
+    ):
+        """Return (exit code, docker argv lines, stderr text) from the stub run."""
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             calls = d / "calls.log"
@@ -375,15 +388,15 @@ class IdentityTest(unittest.TestCase):
                 "esac\n"
             )
             (d / "docker").chmod(0o755)
-            rc = sh(
-                'verify_testing_identity "$@"',
+            done = sh(
+                script,
                 ref,
                 IMAGE,
                 "linux/amd64",
                 path_prefix=tmp,
-            ).returncode
+            )
             recorded = calls.read_text() if calls.exists() else ""
-            return rc, recorded.splitlines()
+            return done.returncode, recorded.splitlines(), done.stderr
 
     def test_match(self):
         self.assertEqual(self.verify(SHA, "strixd testing-770b6ecb521a"), 0)
@@ -420,7 +433,7 @@ class IdentityTest(unittest.TestCase):
         rc, calls = self.verify_calls(SHA, "", run_rc=124)
         self.assertNotEqual(rc, 0)
         name = self.run_name(calls)
-        self.assertRegex(name, r"^dockerized-testing-identity-\d+$")
+        self.assertRegex(name, r"^dockerized-testing-identity-\d+-\d+$")
         self.assertIn(f"rm -f {name}", calls)
 
     def test_run_failure_force_removes_named_container(self):
@@ -432,6 +445,52 @@ class IdentityTest(unittest.TestCase):
         rc, calls = self.verify_calls(SHA, "strixd testing-770b6ecb521a")
         self.assertEqual(rc, 0)
         self.assertFalse(any(line.startswith("rm ") for line in calls), calls)
+
+    def test_two_calls_in_one_shell_get_distinct_names(self):
+        # prebuild skip check and post-push check share $$; the nonce must differ
+        rc, calls, _ = self.verify_full(
+            SHA,
+            "",
+            run_rc=124,
+            script='verify_testing_identity "$@"; verify_testing_identity "$@"',
+        )
+        self.assertNotEqual(rc, 0)
+        runs = [line.split() for line in calls if line.startswith("run ")]
+        self.assertEqual(len(runs), 2, calls)
+        names = [argv[argv.index("--name") + 1] for argv in runs]
+        self.assertNotEqual(names[0], names[1])
+        for name in names:
+            self.assertRegex(name, r"^dockerized-testing-identity-\d+-\d+$")
+            self.assertIn(f"rm -f {name}", calls)
+
+    def test_failure_branches_print_one_reason_line(self):
+        rc, _, err = self.verify_full(OTHER, "strixd testing-770b6ecb521a")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(
+            err,
+            f"identity: revision label check failed for {IMAGE} (want {SHA})\n",
+        )
+        rc, _, err = self.verify_full(SHA, "", inspect_rc=1)
+        self.assertEqual(
+            err,
+            f"identity: revision label check failed for {IMAGE} (want {SHA})\n",
+        )
+        rc, _, err = self.verify_full(SHA, "", run_rc=124)
+        self.assertEqual(err, "identity: docker run failed rc=124\n")
+        rc, _, err = self.verify_full(SHA, "strixd testing-770b6ecb521a", run_rc=1)
+        self.assertEqual(err, "identity: docker run failed rc=1\n")
+        rc, _, err = self.verify_full(SHA, "strixd testing")
+        self.assertNotEqual(rc, 0)
+        self.assertEqual(
+            err,
+            "identity: version mismatch: got 'strixd testing' "
+            "want 'strixd testing-770b6ecb521a'\n",
+        )
+
+    def test_success_prints_nothing_on_stderr(self):
+        rc, _, err = self.verify_full(SHA, "strixd testing-770b6ecb521a")
+        self.assertEqual(rc, 0)
+        self.assertEqual(err, "")
 
 
 if __name__ == "__main__":

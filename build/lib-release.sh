@@ -114,9 +114,16 @@ testing_version() {
 # After a push: true only when every platform's revision label equals <main-sha>
 # (image_built_from) AND a bounded amd64 `docker run` of the pulled image reports
 # `strixd testing-<sha12>`. Registry unreachable, mismatch or run failure -> false.
+# Each failure branch prints one reason line to stderr. The container name carries
+# a per-call nonce so two calls in one shell (prebuild check, then post-push check)
+# never collide with a leftover container from an earlier timed-out run.
 verify_testing_identity() {
-    local sha="$1" image="$2" out name="dockerized-testing-identity-$$" rc
-    image_built_from "$@" || return 1
+    local sha="$1" image="$2" out rc
+    local name="dockerized-testing-identity-$$-${RANDOM}${RANDOM}"
+    if ! image_built_from "$@"; then
+        echo "identity: revision label check failed for $image (want $sha)" >&2
+        return 1
+    fi
     out="$(timeout 180 docker run --rm --pull always --platform linux/amd64 \
         --label "myguard.run=$name" \
         --name "$name" "$image" version 2>/dev/null)"
@@ -124,7 +131,12 @@ verify_testing_identity() {
     if (( rc != 0 )); then
         # A host timeout kills only the docker client; remove the exact container.
         docker rm -f "$name" >/dev/null 2>&1 || true
+        echo "identity: docker run failed rc=$rc" >&2
         return 1
     fi
-    [[ "$out" == "strixd $(testing_version "$sha")" ]]
+    if [[ "$out" != "strixd $(testing_version "$sha")" ]]; then
+        echo "identity: version mismatch: got '$out' want 'strixd $(testing_version "$sha")'" >&2
+        return 1
+    fi
+    return 0
 }
