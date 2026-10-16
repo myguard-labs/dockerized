@@ -57,10 +57,16 @@ export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # so no SKIP flag needs threading through here — just warn for visibility.
 export MAILSTRIX_VERSION="$(mailstrix_source_version "$REPO_DIR/src/mailstrix")"
 export MAILSTRIX_RELEASE="$(resolve_mailstrix_release "$REPO_DIR/src/mailstrix")"
-# mailstrix:testing builds the current main commit; pin it so the git context
-# and the image's revision label agree. Falls back to "main" if unresolved.
-MAILSTRIX_MAIN_REF="$(git ls-remote "https://github.com/$MAILSTRIX_GH_REPO.git" refs/heads/main 2>/dev/null | cut -f1)"
+# mailstrix:testing builds the current main commit; pin it so the git context,
+# the image's revision label and its /version agree. When it cannot be resolved
+# to a 40-hex SHA, ad-hoc (PUSH=0) runs keep the bake default "main", but a push
+# run never publishes an unbound :testing: buildx-sequential.sh skips the target.
+MAILSTRIX_MAIN_REF="$(resolve_mailstrix_main_ref)"
 export MAILSTRIX_MAIN_REF="${MAILSTRIX_MAIN_REF:-main}"
+if [[ "$PUSH" == 1 || "$PUSH" == true ]] && ! is_full_sha "$MAILSTRIX_MAIN_REF"; then
+    echo "[daily] WARN: could not resolve mailstrix main to a commit SHA (git ls-remote failed/empty) — debian-mailstrix-testing will be skipped this run" >&2
+    python3 "$DISCORD" message "🐳 dockerized daily: mailstrix:testing skipped" "Could not resolve mailstrix main (git ls-remote failed or malformed); :testing was not rebuilt to avoid publishing an unbound image." || true
+fi
 [[ -z "$MAILSTRIX_RELEASE" ]] && \
     echo "[daily] WARN: could not resolve MAILSTRIX_RELEASE (gh + git describe both empty) — debian-mailstrix will be skipped this run" >&2
 echo "[daily] VCS_REF=$VCS_REF BUILD_DATE=$BUILD_DATE MAILSTRIX_VERSION=$MAILSTRIX_VERSION MAILSTRIX_RELEASE=$MAILSTRIX_RELEASE MAILSTRIX_MAIN_REF=$MAILSTRIX_MAIN_REF"

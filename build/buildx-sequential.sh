@@ -218,6 +218,7 @@ echo ""
 FAILED=0
 SUCCESS=0
 SKIPPED=0
+UNBOUND_SKIPPED=0
 TOTAL_TARGETS=0
 CURRENT_TARGET_NUM=0
 BUILD_START_TIME=$(date +%s)
@@ -286,26 +287,41 @@ for LAYER in "${LAYERS[@]}"; do
 
         # mailstrix:testing is a ~30 min source build per arch that only changes
         # when main moves (rules refresh at runtime via strixd's daily poll).
-        # When pushing, skip it if the published image already has every
-        # platform the target builds, all labelled with the resolved main SHA.
+        # When pushing, never publish it unbound: MAILSTRIX_MAIN_REF must be a
+        # 40-hex SHA or the target is skipped with a warning (even with FORCE).
+        # Otherwise skip it only if the published image has the FULL identity:
+        # every platform labelled with the resolved main SHA AND `strixd version`
+        # == testing-<sha12> (verify_testing_identity). A revision label alone is
+        # not enough: an image published before VERSION was pinned, or one that
+        # failed the post-push check, may carry the current SHA yet be wrong.
         # MAILSTRIX_TESTING_FORCE=1 rebuilds regardless (e.g. after changing
         # this target's build args in docker-bake.hcl).
-        if [[ "$TARGET" == "debian-mailstrix-testing" && "$PUSH_ARG" == "--push" \
-              && "${MAILSTRIX_TESTING_FORCE:-0}" != "1" ]]; then
+        TESTING_IMAGE=""
+        TESTING_PLATFORMS=()
+        if [[ "$TARGET" == "debian-mailstrix-testing" ]]; then
+            case "$(testing_prebuild_decision "$PUSH_ARG" "${MAILSTRIX_TESTING_FORCE:-0}" "${MAILSTRIX_MAIN_REF:-}")" in
+            unbound)
+                log_warning "Skipping $TARGET — MAILSTRIX_MAIN_REF='${MAILSTRIX_MAIN_REF:-}' is not a 40-hex commit SHA; refusing to publish an unbound :testing"
+                SKIPPED=$((SKIPPED+1))
+                UNBOUND_SKIPPED=$((UNBOUND_SKIPPED+1))
+                echo ""
+                continue
+                ;;
+            esac
             # Inspect exactly the tag and platforms bake will publish. Check each
             # producer's status; on any failure the platform list stays empty
-            # and image_built_from refuses to skip.
-            TESTING_IMAGE=""
-            TESTING_PLATFORMS=()
-            if TESTING_BAKE="$(docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
+            # and the identity check refuses to skip.
+            if [[ "$PUSH_ARG" == "--push" ]] \
+                && TESTING_BAKE="$(docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
                     --print "$TARGET" 2>/dev/null)" \
                 && TESTING_IMAGE="$(jq -r '.target[].tags[0] // empty' <<<"$TESTING_BAKE")" \
                 && TESTING_PLATFORM_LIST="$(jq -r '[.target[].platforms[]?] | join(" ")' \
                     <<<"$TESTING_BAKE")"; then
                 read -r -a TESTING_PLATFORMS <<<"$TESTING_PLATFORM_LIST"
             fi
-            if [[ -n "$TESTING_IMAGE" ]] \
-                && image_built_from "${MAILSTRIX_MAIN_REF:-}" "$TESTING_IMAGE" \
+            if [[ "$PUSH_ARG" == "--push" && "${MAILSTRIX_TESTING_FORCE:-0}" != "1" \
+                  && -n "$TESTING_IMAGE" ]] \
+                && verify_testing_identity "${MAILSTRIX_MAIN_REF:-}" "$TESTING_IMAGE" \
                     "${TESTING_PLATFORMS[@]}"; then
                 log_info "  ↷ SKIPPED — $TESTING_IMAGE already built from main ${MAILSTRIX_MAIN_REF:0:7} (${TESTING_PLATFORMS[*]})"
                 SKIPPED=$((SKIPPED+1))
@@ -326,10 +342,23 @@ for LAYER in "${LAYERS[@]}"; do
         --progress=plain \
         ${PUSH_ARG} $TARGET > "$TARGET_LOG" 2>&1; then
             
-            SUCCESS=$((SUCCESS+1))
-            SUCCEEDED_TARGETS+=("$TARGET")
             TARGET_ELAPSED=$(($(date +%s) - TARGET_START_TIME))
-            log_info "  ✓ SUCCESS ($(format_time $TARGET_ELAPSED))"
+            # A pushed :testing must prove it is the main commit we resolved
+            # (revision label + `strixd version`); otherwise count it FAILED so
+            # the daily alerts. Unreachable registry counts as a mismatch.
+            if [[ "$TARGET" == "debian-mailstrix-testing" && "$PUSH_ARG" == "--push" ]] \
+                && ! verify_testing_identity "${MAILSTRIX_MAIN_REF:-}" "${TESTING_IMAGE:-}" \
+                    "${TESTING_PLATFORMS[@]}" 2>>"$TARGET_LOG"; then
+                log_error "  ✗ FAILED identity check: ${TESTING_IMAGE:-?} is not main ${MAILSTRIX_MAIN_REF:0:12} ($(testing_version "${MAILSTRIX_MAIN_REF:-}"))"
+                log_error "  Full log: $TARGET_LOG"
+                printf '\nERROR: pushed image identity does not match %s\n' "${MAILSTRIX_MAIN_REF:-}" >> "$TARGET_LOG"
+                FAILED=$((FAILED+1))
+                FAILED_TARGETS+=("$TARGET")
+            else
+                SUCCESS=$((SUCCESS+1))
+                SUCCEEDED_TARGETS+=("$TARGET")
+                log_info "  ✓ SUCCESS ($(format_time $TARGET_ELAPSED))"
+            fi
             
         else
             EXIT_CODE=$?
@@ -387,7 +416,8 @@ SUMMARY_FILE="/tmp/buildx-summary-$(date +%s).txt"
     echo "========================================="
     echo "Successful: $SUCCESS/$TOTAL_TARGETS"
     echo "Failed: $FAILED/$TOTAL_TARGETS"
-    echo "Skipped (unchanged): $SKIPPED/$TOTAL_TARGETS"
+    echo "Skipped: $SKIPPED/$TOTAL_TARGETS"
+    echo "  of which unbound mailstrix:testing ref: $UNBOUND_SKIPPED"
     BUILD_ELAPSED=$(($(date +%s) - BUILD_START_TIME))
     echo "Total Time: $(format_time $BUILD_ELAPSED)"
     echo ""
@@ -432,7 +462,8 @@ BUILD_ELAPSED=$(($(date +%s) - BUILD_START_TIME))
 echo "========================================="
 echo -e "  ${GREEN}Successful${NC}: $SUCCESS/$TOTAL_TARGETS"
 echo -e "  ${RED}Failed${NC}: $FAILED/$TOTAL_TARGETS"
-echo -e "  ${YELLOW}Skipped (unchanged)${NC}: $SKIPPED/$TOTAL_TARGETS"
+echo -e "  ${YELLOW}Skipped${NC}: $SKIPPED/$TOTAL_TARGETS"
+echo -e "    ${YELLOW}of which unbound mailstrix:testing ref${NC}: $UNBOUND_SKIPPED"
 echo -e "  ${BLUE}Total Time${NC}: $(format_time $BUILD_ELAPSED)"
 echo ""
 
