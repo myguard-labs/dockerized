@@ -55,3 +55,26 @@ check_build_proxy() {
         return 1
     fi
 }
+
+# Print one "  <target>: FAILED (...)" line per failed or timed-out target in a
+# captured buildx-sequential.sh run log, with ANSI colour codes stripped. The
+# target name comes from the preceding "[BUILD] ... Target N/M: <name>" line;
+# the "✗ FAILED" line itself does not carry it.
+failed_target_list() {
+    local run_log="$1" limit="${2:-40}"
+    [[ -r "$run_log" ]] || return 0
+    sed 's/\x1b\[[0-9;]*m//g' -- "$run_log" | awk -v limit="$limit" '
+        /^\[BUILD\] .*Target [0-9]+\/[0-9]+: / {
+            target = $NF
+            next
+        }
+        /✗ (FAILED|TIMEOUT)/ && target != "" {
+            status = $0
+            sub(/^.*✗ /, "", status)
+            if (n++ < limit) printf "  %s: %s\n", target, status
+            target = ""
+        }
+        END {
+            if (n > limit) printf "  ... and %d more\n", n - limit
+        }'
+}

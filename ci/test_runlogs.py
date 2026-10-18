@@ -156,5 +156,65 @@ class WiringTest(unittest.TestCase):
         self.assertIn('SUCCEEDED_TARGETS+=("$TARGET")', source)
 
 
+class FailedTargetListTest(unittest.TestCase):
+    RED, CYAN, NC = "\x1b[0;31m", "\x1b[0;36m", "\x1b[0m"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="dockerized-failed-")
+        self.log = Path(self.tmp.name) / "run.log"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def build(self, n, target):
+        return f"{self.CYAN}[BUILD]{self.NC} [{n}/88 (1%)] Layer 4, Target {n}/26: {target}\n"
+
+    def failed(self, status="FAILED (00:00:16 exit code: 1)"):
+        return f"{self.RED}[ERROR]{self.NC}   \u2717 {status}\n"
+
+    def run_list(self, *extra):
+        result = run('failed_target_list "$@"', str(self.log), *extra)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def test_names_failed_and_timed_out_targets_without_ansi(self):
+        self.log.write_text(
+            self.build(1, "debian-base")
+            + "\x1b[0;32m[INFO]\x1b[0m   \u2713 SUCCESS (00:02:36)\n"
+            + self.build(2, "debian-angie") + self.failed()
+            + self.build(3, "ubuntu-nginx")
+            + self.failed("TIMEOUT (04:00:00 exit code: 124)")
+        )
+        self.assertEqual(
+            self.run_list(),
+            "  debian-angie: FAILED (00:00:16 exit code: 1)\n"
+            "  ubuntu-nginx: TIMEOUT (04:00:00 exit code: 124)\n",
+        )
+
+    def test_limit_boundary_and_overflow_note(self):
+        self.log.write_text("".join(
+            self.build(i, f"t{i}") + self.failed() for i in range(1, 4)))
+        self.assertEqual(self.run_list("3").count("\n"), 3)
+        out = self.run_list("2")
+        self.assertEqual(out.splitlines()[-1], "  ... and 1 more")
+        self.assertNotIn("t3:", out)
+
+    def test_failure_without_build_line_is_not_misattributed(self):
+        self.log.write_text(
+            self.build(1, "debian-angie") + self.failed() + self.failed())
+        self.assertEqual(self.run_list().count("debian-angie"), 1)
+
+    def test_all_success_and_missing_log_print_nothing(self):
+        self.log.write_text(self.build(1, "debian-base") + "\u2713 SUCCESS\n")
+        self.assertEqual(self.run_list(), "")
+        self.log.unlink()
+        self.assertEqual(self.run_list(), "")
+
+    def test_daily_alert_uses_helper(self):
+        source = (ROOT / "build/daily.sh").read_text()
+        self.assertIn('failed_target_list "$RUN_LOG"', source)
+        self.assertNotIn("grep -E '\u2717 (FAILED|TIMEOUT)'", source)
+
+
 if __name__ == "__main__":
     unittest.main()

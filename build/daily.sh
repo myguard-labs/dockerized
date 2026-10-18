@@ -79,8 +79,9 @@ RC=${PIPESTATUS[0]}
 set -e 2>/dev/null || true
 
 # --- pull the summary numbers + failed list out of the captured output ---------
-SUMMARY="$(grep -E 'Successful:|Failed:' "$RUN_LOG" | tail -2)"
-FAIL_LIST="$(grep -E '✗ (FAILED|TIMEOUT)' "$RUN_LOG" | sed 's/^[[:space:]]*/  /' | head -40)"
+SUMMARY="$(sed 's/\x1b\[[0-9;]*m//g' "$RUN_LOG" | grep -E 'Successful:|Failed:' | tail -2)"
+source "$SCRIPT_DIR/lib-runlogs.sh"
+FAIL_LIST="$(failed_target_list "$RUN_LOG" 40)"
 
 echo "[daily] exit=$RC"
 echo "$SUMMARY"
