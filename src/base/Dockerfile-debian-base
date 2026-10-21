@@ -34,7 +34,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         echo 'Pin-Priority: 600'; \
     } > /etc/apt/preferences.d/99backports ;\
     apt-get update ;\
-    apt-get install -y --no-install-recommends ssl-cert ;\
+    apt-get install -y --no-install-recommends ssl-cert eatmydata ;\
+    # apt runs dpkg (and every maintainer script) under eatmydata, then syncs \
+    # once when dpkg exits. Per-file fsync dominates installs under QEMU \
+    # arm64. Scoped to apt's dpkg call only, so services in the running \
+    # container (mariadb, dovecot, ...) keep their fsync. Falls back to plain \
+    # dpkg when a child image purges eatmydata, so apt never breaks. \
+    printf '#!/bin/sh\nif [ -x /usr/bin/eatmydata ]; then /usr/bin/eatmydata /usr/bin/dpkg "$@"; else /usr/bin/dpkg "$@"; fi\nrc=$?\nsync\nexit $rc\n' > /usr/local/sbin/dpkg-eatmydata ;\
+    chmod 0755 /usr/local/sbin/dpkg-eatmydata ;\
+    echo 'Dir::Bin::dpkg "/usr/local/sbin/dpkg-eatmydata";' > /etc/apt/apt.conf.d/00eatmydata ;\
     echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://deb.myguard.nl:8888 ${DIST} main" > /etc/apt/sources.list.d/deb.myguard.nl.list ;\
     apt-get -y update ;\
     apt-get install -y --no-install-recommends ca-certificates tzdata libjemalloc2 libmimalloc3 wait-for-it openssl ;\
