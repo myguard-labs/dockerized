@@ -335,10 +335,13 @@ for LAYER in "${LAYERS[@]}"; do
         rm -f "$TARGET_LOG"
         
         # ARM64 builds under QEMU, especially source builds, can exceed 30 minutes.
+        # Tag the cache per target: an untagged local cache keeps one "latest"
+        # ref, so each export would drop every earlier target's cache and the
+        # next run rebuilds everything (QEMU arm64 included) from scratch.
         if timeout --kill-after=60s "$BUILD_TIMEOUT" docker buildx bake -f "$PROJECT_ROOT/docker-bake.hcl" \
         --builder "$BUILDER_NAME" \
-        --set "*.cache-from=type=local,src=$CACHE_DIR" \
-        --set "*.cache-to=type=local,dest=$CACHE_DIR,mode=max" \
+        --set "*.cache-from=type=local,src=$CACHE_DIR,tag=$TARGET" \
+        --set "*.cache-to=type=local,dest=$CACHE_DIR,mode=max,tag=$TARGET" \
         --progress=plain \
         ${PUSH_ARG} $TARGET > "$TARGET_LOG" 2>&1; then
             
