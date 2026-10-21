@@ -15,10 +15,11 @@ variable "MAILSTRIX_VERSION" { default = "dev" }
 # debian-mailstrix's Dockerfile.release downloads the per-arch release binaries
 # from this tag and tags the image with it. Must name a release that has assets.
 variable "MAILSTRIX_RELEASE" { default = "" }
-# The mailstrix main commit :testing is built from. daily.sh resolves it with
-# git ls-remote so the git context and the revision label name the same
-# commit; an ad-hoc build without it falls back to the moving main branch.
-variable "MAILSTRIX_MAIN_REF" { default = "main" }
+# The mailstrix commit the `nightly` tag points at; :testing is built from it.
+# daily.sh resolves it with git ls-remote so the git context, the downloaded
+# nightly binaries and the revision label name the same commit; an ad-hoc build
+# without it falls back to the moving nightly tag.
+variable "MAILSTRIX_NIGHTLY_REF" { default = "nightly" }
 
 # Shared metadata. Targets inherit this to receive VCS_REF / BUILD_DATE both as
 # build-args (for Dockerfiles that bake them into their own LABEL block, e.g.
@@ -628,28 +629,33 @@ target "debian-mailstrix" {
    # VERSION = the release tag whose per-arch binaries Dockerfile.release pulls.
    args = { CACHEBUST = "${BUILD_DATE}", VERSION = "${MAILSTRIX_RELEASE}" }
 }
-# mailstrix:testing — the default branch (main) built from source, with the
-# latest public rulesets at build time. The daily only rebuilds it when main has
-# moved past the published image's revision label (buildx-sequential.sh;
+# mailstrix:testing — the mailstrix nightly prerelease: the per-arch binaries
+# (and the marker yarac/libyara pair) GitHub builds natively for both arches at
+# ~10:00 UTC whenever main's code changed, published under the mutable `nightly`
+# tag. Like debian-mailstrix, Dockerfile.release only downloads and checksum-
+# verifies them (no Go/libyara compile here) and bakes the latest public
+# rulesets. The daily only rebuilds it when the nightly tag has moved past the
+# published image's revision label (buildx-sequential.sh;
 # MAILSTRIX_TESTING_FORCE=1 overrides); strixd's own rules poll keeps a running
-# container's rules fresh in between. :latest and
-# :<version> above stay on the newest published release. Built straight from
-# the public git repo, so it always tracks main and never the src/mailstrix pin.
-# Compiles Go + static libyara on each target architecture; native ARM64 workers
-# are preferable to QEMU for this source build.
+# container's rules fresh in between. :latest and :<version> above stay on the
+# newest published release. The context is the public repo at the nightly
+# commit, so the rules scripts and NOTICE match the binaries, never the
+# src/mailstrix pin.
 target "debian-mailstrix-testing" {
     inherits = ["_meta"]
    tags = ["docker.io/eilandert/mailstrix:testing"]
-   context = "https://github.com/myguard-labs/mailstrix.git#${MAILSTRIX_MAIN_REF}"
-   dockerfile = "docker/Dockerfile"
+   context = "https://github.com/myguard-labs/mailstrix.git#${MAILSTRIX_NIGHTLY_REF}"
+   dockerfile = "docker/Dockerfile.release"
    target = "final"
    # The inherited revision label names the dockerized commit; this image is
-   # built from mailstrix, so label it with the mailstrix commit instead.
-   labels = { "org.opencontainers.image.revision" = MAILSTRIX_MAIN_REF, "org.opencontainers.image.source" = "https://github.com/myguard-labs/mailstrix" }
-   # VERSION is what strixd reports on /version ("version") and `strixd version`.
-   # testing-<12 hex of the main commit> keeps the channel readable while binding
-   # the identity to the commit (matches testing_version in build/lib-release.sh).
-   args = { CACHEBUST = "${BUILD_DATE}", VERSION = "testing-${substr(MAILSTRIX_MAIN_REF, 0, 12)}" }
+   # built from mailstrix, so label it with the mailstrix nightly commit instead.
+   labels = { "org.opencontainers.image.revision" = MAILSTRIX_NIGHTLY_REF, "org.opencontainers.image.source" = "https://github.com/myguard-labs/mailstrix" }
+   # RELEASE_CACHEBUST = the nightly commit: the nightly assets are replaced in
+   # place, so a new commit must invalidate the cached download layer.
+   # BUILD_VERSION = the image version label, nightly-<12 hex of the commit>,
+   # which is also what the nightly strixd reports on /version and
+   # `strixd version` (matches testing_version in build/lib-release.sh).
+   args = { CACHEBUST = "${BUILD_DATE}", RELEASE_TAG = "nightly", RELEASE_CACHEBUST = "${MAILSTRIX_NIGHTLY_REF}", BUILD_VERSION = "nightly-${substr(MAILSTRIX_NIGHTLY_REF, 0, 12)}" }
 }
 target "debian-sitewarmup" {
     inherits = ["_meta"]

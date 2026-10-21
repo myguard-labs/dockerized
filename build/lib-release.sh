@@ -46,7 +46,7 @@ mailstrix_source_version() {
 # Anything else (a symbolic ref like "main", an unreachable registry, a
 # mixed-revision manifest, a missing architecture, malformed inspect output)
 # returns false so the caller builds. buildx-sequential.sh uses it to skip
-# rebuilding mailstrix:testing when main has not moved.
+# rebuilding mailstrix:testing when the nightly tag has not moved.
 image_built_from() {
     local sha="$1" image="$2" inspect_output
     shift 2
@@ -70,13 +70,17 @@ is_full_sha() {
     [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]]
 }
 
-# resolve_mailstrix_main_ref -- echo the current mailstrix main commit SHA, or ""
-# when `git ls-remote` fails, returns nothing or returns something that is not a
-# 40-hex SHA. The caller must treat "" as unbound, never as a moving ref.
-resolve_mailstrix_main_ref() {
-    local out
-    if out="$(git ls-remote "https://github.com/$MAILSTRIX_GH_REPO.git" refs/heads/main 2>/dev/null)"; then
-        out="$(printf '%s\n' "$out" | cut -f1)"
+# resolve_mailstrix_nightly_ref -- echo the commit SHA the mailstrix `nightly`
+# tag points at (the peeled ^{} commit when the tag is annotated), or "" when
+# `git ls-remote` fails, returns nothing (the tag is gone, e.g. mid delete +
+# recreate during a nightly publish) or returns something that is not a 40-hex
+# SHA. The caller must treat "" as unbound, never as a moving ref.
+resolve_mailstrix_nightly_ref() {
+    local out peeled
+    if out="$(git ls-remote "https://github.com/$MAILSTRIX_GH_REPO.git" \
+            refs/tags/nightly 'refs/tags/nightly^{}' 2>/dev/null)"; then
+        peeled="$(printf '%s\n' "$out" | awk -F'\t' '$2 == "refs/tags/nightly^{}" {print $1}')"
+        out="${peeled:-$(printf '%s\n' "$out" | awk -F'\t' '$2 == "refs/tags/nightly" {print $1}')}"
     else
         out=""
     fi
@@ -84,7 +88,7 @@ resolve_mailstrix_main_ref() {
     return 0
 }
 
-# testing_prebuild_decision <push-arg> <force> <main-ref>
+# testing_prebuild_decision <push-arg> <force> <nightly-ref>
 # Echo what to do with debian-mailstrix-testing before building:
 #   build   -- non-push (ad-hoc) build, or forced: proceed (bake default applies)
 #   unbound -- push mode and the ref is not a 40-hex SHA: skip with a warning,
@@ -103,17 +107,18 @@ testing_prebuild_decision() {
     fi
 }
 
-# testing_version <main-sha> -- the VERSION baked into :testing (strixd /version
-# "version" field and `strixd version`): testing-<first 12 hex of the commit>.
-# Must stay in sync with docker-bake.hcl's substr(MAILSTRIX_MAIN_REF, 0, 12).
+# testing_version <nightly-sha> -- the version :testing's strixd reports (/version
+# "version" field and `strixd version`): nightly-<first 12 hex of the commit>, as
+# stamped into the nightly release binaries by mailstrix's nightly.yml. Must stay
+# in sync with docker-bake.hcl's BUILD_VERSION substr(MAILSTRIX_NIGHTLY_REF, 0, 12).
 testing_version() {
-    printf 'testing-%s' "${1:0:12}"
+    printf 'nightly-%s' "${1:0:12}"
 }
 
-# verify_testing_identity <main-sha> <image-ref> <platform>...
-# After a push: true only when every platform's revision label equals <main-sha>
+# verify_testing_identity <nightly-sha> <image-ref> <platform>...
+# After a push: true only when every platform's revision label equals <nightly-sha>
 # (image_built_from) AND a bounded amd64 `docker run` of the pulled image reports
-# `strixd testing-<sha12>`. Registry unreachable, mismatch or run failure -> false.
+# `strixd nightly-<sha12>`. Registry unreachable, mismatch or run failure -> false.
 # Each failure branch prints one reason line to stderr. The container name carries
 # a per-call nonce so two calls in one shell (prebuild check, then post-push check)
 # never collide with a leftover container from an earlier timed-out run.

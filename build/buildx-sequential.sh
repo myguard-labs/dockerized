@@ -285,13 +285,13 @@ for LAYER in "${LAYERS[@]}"; do
             log_info "  mailstrix VERSION=$MAILSTRIX_RELEASE"
         fi
 
-        # mailstrix:testing is a ~30 min source build per arch that only changes
-        # when main moves (rules refresh at runtime via strixd's daily poll).
-        # When pushing, never publish it unbound: MAILSTRIX_MAIN_REF must be a
+        # mailstrix:testing only changes when the nightly tag moves (rules
+        # refresh at runtime via strixd's daily poll).
+        # When pushing, never publish it unbound: MAILSTRIX_NIGHTLY_REF must be a
         # 40-hex SHA or the target is skipped with a warning (even with FORCE).
         # Otherwise skip it only if the published image has the FULL identity:
-        # every platform labelled with the resolved main SHA AND `strixd version`
-        # == testing-<sha12> (verify_testing_identity). A revision label alone is
+        # every platform labelled with the resolved nightly SHA AND `strixd version`
+        # == nightly-<sha12> (verify_testing_identity). A revision label alone is
         # not enough: an image published before VERSION was pinned, or one that
         # failed the post-push check, may carry the current SHA yet be wrong.
         # MAILSTRIX_TESTING_FORCE=1 rebuilds regardless (e.g. after changing
@@ -299,9 +299,9 @@ for LAYER in "${LAYERS[@]}"; do
         TESTING_IMAGE=""
         TESTING_PLATFORMS=()
         if [[ "$TARGET" == "debian-mailstrix-testing" ]]; then
-            case "$(testing_prebuild_decision "$PUSH_ARG" "${MAILSTRIX_TESTING_FORCE:-0}" "${MAILSTRIX_MAIN_REF:-}")" in
+            case "$(testing_prebuild_decision "$PUSH_ARG" "${MAILSTRIX_TESTING_FORCE:-0}" "${MAILSTRIX_NIGHTLY_REF:-}")" in
             unbound)
-                log_warning "Skipping $TARGET — MAILSTRIX_MAIN_REF='${MAILSTRIX_MAIN_REF:-}' is not a 40-hex commit SHA; refusing to publish an unbound :testing"
+                log_warning "Skipping $TARGET — MAILSTRIX_NIGHTLY_REF='${MAILSTRIX_NIGHTLY_REF:-}' is not a 40-hex commit SHA; refusing to publish an unbound :testing"
                 SKIPPED=$((SKIPPED+1))
                 UNBOUND_SKIPPED=$((UNBOUND_SKIPPED+1))
                 echo ""
@@ -321,9 +321,9 @@ for LAYER in "${LAYERS[@]}"; do
             fi
             if [[ "$PUSH_ARG" == "--push" && "${MAILSTRIX_TESTING_FORCE:-0}" != "1" \
                   && -n "$TESTING_IMAGE" ]] \
-                && verify_testing_identity "${MAILSTRIX_MAIN_REF:-}" "$TESTING_IMAGE" \
+                && verify_testing_identity "${MAILSTRIX_NIGHTLY_REF:-}" "$TESTING_IMAGE" \
                     "${TESTING_PLATFORMS[@]}"; then
-                log_info "  ↷ SKIPPED — $TESTING_IMAGE already built from main ${MAILSTRIX_MAIN_REF:0:7} (${TESTING_PLATFORMS[*]})"
+                log_info "  ↷ SKIPPED — $TESTING_IMAGE already built from nightly ${MAILSTRIX_NIGHTLY_REF:0:7} (${TESTING_PLATFORMS[*]})"
                 SKIPPED=$((SKIPPED+1))
                 echo ""
                 continue
@@ -346,15 +346,15 @@ for LAYER in "${LAYERS[@]}"; do
         ${PUSH_ARG} $TARGET > "$TARGET_LOG" 2>&1; then
             
             TARGET_ELAPSED=$(($(date +%s) - TARGET_START_TIME))
-            # A pushed :testing must prove it is the main commit we resolved
+            # A pushed :testing must prove it is the nightly commit we resolved
             # (revision label + `strixd version`); otherwise count it FAILED so
             # the daily alerts. Unreachable registry counts as a mismatch.
             if [[ "$TARGET" == "debian-mailstrix-testing" && "$PUSH_ARG" == "--push" ]] \
-                && ! verify_testing_identity "${MAILSTRIX_MAIN_REF:-}" "${TESTING_IMAGE:-}" \
+                && ! verify_testing_identity "${MAILSTRIX_NIGHTLY_REF:-}" "${TESTING_IMAGE:-}" \
                     "${TESTING_PLATFORMS[@]}" 2>>"$TARGET_LOG"; then
-                log_error "  ✗ FAILED identity check: ${TESTING_IMAGE:-?} is not main ${MAILSTRIX_MAIN_REF:0:12} ($(testing_version "${MAILSTRIX_MAIN_REF:-}"))"
+                log_error "  ✗ FAILED identity check: ${TESTING_IMAGE:-?} is not nightly ${MAILSTRIX_NIGHTLY_REF:0:12} ($(testing_version "${MAILSTRIX_NIGHTLY_REF:-}"))"
                 log_error "  Full log: $TARGET_LOG"
-                printf '\nERROR: pushed image identity does not match %s\n' "${MAILSTRIX_MAIN_REF:-}" >> "$TARGET_LOG"
+                printf '\nERROR: pushed image identity does not match %s\n' "${MAILSTRIX_NIGHTLY_REF:-}" >> "$TARGET_LOG"
                 FAILED=$((FAILED+1))
                 FAILED_TARGETS+=("$TARGET")
             else

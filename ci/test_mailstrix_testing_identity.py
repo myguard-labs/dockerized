@@ -161,16 +161,53 @@ class ReleaseTagTest(unittest.TestCase):
             self.assertEqual(out, "nightly nightly")
 
 
-class MainRefTest(unittest.TestCase):
+class NightlyRefTest(unittest.TestCase):
     def resolve(self, git_body):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             (d / "git").write_text(f"#!/bin/sh\n{git_body}\n")
             (d / "git").chmod(0o755)
-            return sh("resolve_mailstrix_main_ref", path_prefix=tmp).stdout.strip()
+            return sh("resolve_mailstrix_nightly_ref", path_prefix=tmp).stdout.strip()
 
     def test_present(self):
-        self.assertEqual(self.resolve(f'printf "{SHA}\\trefs/heads/main\\n"'), SHA)
+        self.assertEqual(self.resolve(f'printf "{SHA}\\trefs/tags/nightly\\n"'), SHA)
+
+    def test_annotated_tag_uses_peeled_commit(self):
+        # ls-remote lists the tag object first, then the peeled ^{} commit
+        self.assertEqual(
+            self.resolve(
+                f'printf "{OTHER}\\trefs/tags/nightly\\n'
+                f'{SHA}\\trefs/tags/nightly^{{}}\\n"'
+            ),
+            SHA,
+        )
+
+    def test_peeled_commit_wins_regardless_of_order(self):
+        self.assertEqual(
+            self.resolve(
+                f'printf "{SHA}\\trefs/tags/nightly^{{}}\\n'
+                f'{OTHER}\\trefs/tags/nightly\\n"'
+            ),
+            SHA,
+        )
+
+    def test_queries_the_nightly_tag_not_main(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "git").write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{d}/args"\n')
+            (d / "git").chmod(0o755)
+            sh("resolve_mailstrix_nightly_ref", path_prefix=tmp)
+            args = (d / "args").read_text().splitlines()
+        self.assertEqual(args[0], "ls-remote")
+        self.assertIn("refs/tags/nightly", args)
+        self.assertIn("refs/tags/nightly^{}", args)
+        self.assertNotIn("refs/heads/main", args)
+
+    def test_other_refs_are_ignored(self):
+        # a similarly named ref (or main) must never be taken for the tag
+        for ref in ("refs/heads/main", "refs/tags/nightly-old", "refs/heads/nightly"):
+            with self.subTest(ref=ref):
+                self.assertEqual(self.resolve(f'printf "{SHA}\\t{ref}\\n"'), "")
 
     def test_absent_empty(self):
         self.assertEqual(self.resolve("exit 0"), "")
@@ -180,14 +217,14 @@ class MainRefTest(unittest.TestCase):
 
     def test_valid_line_but_failing_git_is_empty(self):
         self.assertEqual(
-            self.resolve(f'printf "{SHA}\\trefs/heads/main\\n"; exit 1'), ""
+            self.resolve(f'printf "{SHA}\\trefs/tags/nightly\\n"; exit 1'), ""
         )
 
     def test_malformed(self):
         for bad in ("zzzz" + "0" * 36, SHA[:7], SHA.upper(), SHA + "00"):
             with self.subTest(bad=bad):
                 self.assertEqual(
-                    self.resolve(f'printf "{bad}\\trefs/heads/main\\n"'), ""
+                    self.resolve(f'printf "{bad}\\trefs/tags/nightly\\n"'), ""
                 )
 
     def decide(self, push, force, ref):
@@ -210,7 +247,7 @@ class MainRefTest(unittest.TestCase):
             (d / "git").write_text("#!/bin/sh\nexit 0\n")
             (d / "git").chmod(0o755)
             out = sh(
-                'ref="$(resolve_mailstrix_main_ref)"; ref="${ref:-main}"; '
+                'ref="$(resolve_mailstrix_nightly_ref)"; ref="${ref:-main}"; '
                 'testing_prebuild_decision --push 1 "$ref"',
                 path_prefix=tmp,
             ).stdout.strip()
@@ -245,9 +282,70 @@ class WiringTest(unittest.TestCase):
         self.assertIn("verify_testing_identity", seq)
         self.assertIn("UNBOUND_SKIPPED", seq)
         daily = (ROOT / "build/daily.sh").read_text()
-        self.assertIn("resolve_mailstrix_main_ref", daily)
+        self.assertIn("resolve_mailstrix_nightly_ref", daily)
         bake = (ROOT / "docker-bake.hcl").read_text()
-        self.assertIn('VERSION = "testing-${substr(MAILSTRIX_MAIN_REF, 0, 12)}"', bake)
+        self.assertIn(
+            'BUILD_VERSION = "nightly-${substr(MAILSTRIX_NIGHTLY_REF, 0, 12)}"', bake
+        )
+
+    def test_testing_target_downloads_the_nightly_release(self):
+        out = subprocess.run(
+            [
+                "docker",
+                "buildx",
+                "bake",
+                "-f",
+                str(ROOT / "docker-bake.hcl"),
+                "--print",
+                "debian-mailstrix-testing",
+            ],
+            env=dict(os.environ, MAILSTRIX_NIGHTLY_REF=SHA),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if out.returncode != 0:
+            self.skipTest(f"docker buildx bake unavailable: {out.stderr.strip()[:200]}")
+        tgt = json.loads(out.stdout)["target"]["debian-mailstrix-testing"]
+        self.assertEqual(tgt["dockerfile"], "docker/Dockerfile.release")
+        self.assertEqual(tgt["target"], "final")
+        self.assertEqual(
+            tgt["context"], f"https://github.com/myguard-labs/mailstrix.git#{SHA}"
+        )
+        self.assertEqual(tgt["args"]["RELEASE_TAG"], "nightly")
+        self.assertEqual(tgt["args"]["RELEASE_CACHEBUST"], SHA)
+        self.assertNotIn("VERSION", tgt["args"])  # VERSION would pick a release
+        self.assertEqual(tgt["args"]["BUILD_VERSION"], "nightly-770b6ecb521a")
+        self.assertEqual(tgt["labels"]["org.opencontainers.image.revision"], SHA)
+        # the bake label and the identity check agree on the version string
+        self.assertEqual(
+            tgt["args"]["BUILD_VERSION"], sh('testing_version "$1"', SHA).stdout
+        )
+        self.assertEqual(sorted(tgt["platforms"]), ["linux/amd64", "linux/arm64"])
+
+    def test_release_target_stays_on_release_binaries(self):
+        out = subprocess.run(
+            [
+                "docker",
+                "buildx",
+                "bake",
+                "-f",
+                str(ROOT / "docker-bake.hcl"),
+                "--print",
+                "debian-mailstrix",
+            ],
+            env=dict(os.environ, MAILSTRIX_RELEASE="1.2.0"),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if out.returncode != 0:
+            self.skipTest(f"docker buildx bake unavailable: {out.stderr.strip()[:200]}")
+        tgt = json.loads(out.stdout)["target"]["debian-mailstrix"]
+        self.assertEqual(tgt["dockerfile"], "docker/Dockerfile.release")
+        self.assertEqual(tgt["args"]["VERSION"], "1.2.0")
+        self.assertNotIn("RELEASE_TAG", tgt["args"])
+        self.assertEqual(sorted(tgt["platforms"]), ["linux/amd64", "linux/arm64"])
 
     def test_summary_counts_unbound_skip_once(self):
         seq = (ROOT / "build/buildx-sequential.sh").read_text()
@@ -260,7 +358,7 @@ class WiringTest(unittest.TestCase):
         self.assertIn("SKIPPED=$((SKIPPED+1))", seq)
 
     def test_testing_version_format(self):
-        self.assertEqual(sh('testing_version "$1"', SHA).stdout, "testing-770b6ecb521a")
+        self.assertEqual(sh('testing_version "$1"', SHA).stdout, "nightly-770b6ecb521a")
 
 
 def write_docker_stub(d, labels_sha, run_out):
@@ -302,7 +400,7 @@ def run_skip_block(block, labels_sha, run_out):
         write_docker_stub(d, labels_sha, run_out)
         script = (
             f'. "{LIB}"; log_info() {{ :; }}; SKIPPED=0; PUSH_ARG=--push; '
-            f"MAILSTRIX_MAIN_REF={SHA}; TESTING_IMAGE={IMAGE}; "
+            f"MAILSTRIX_NIGHTLY_REF={SHA}; TESTING_IMAGE={IMAGE}; "
             "TESTING_PLATFORMS=(linux/amd64)\n"
             f"for _ in 1; do\n{block}\necho BUILD\ndone"
         )
@@ -311,7 +409,7 @@ def run_skip_block(block, labels_sha, run_out):
 
 class SkipPathTest(unittest.TestCase):
     def test_label_and_version_match_is_skipped(self):
-        out = run_skip_block(skip_block(), SHA, "strixd testing-770b6ecb521a")
+        out = run_skip_block(skip_block(), SHA, "strixd nightly-770b6ecb521a")
         self.assertEqual(out, "")  # `continue` before echo BUILD
 
     def test_label_match_but_old_version_is_built(self):
@@ -319,7 +417,7 @@ class SkipPathTest(unittest.TestCase):
         self.assertEqual(out, "BUILD")
 
     def test_label_mismatch_is_built(self):
-        out = run_skip_block(skip_block(), OTHER, "strixd testing-770b6ecb521a")
+        out = run_skip_block(skip_block(), OTHER, "strixd nightly-770b6ecb521a")
         self.assertEqual(out, "BUILD")
 
     def test_negative_control_label_only_skips_old_version(self):
@@ -399,27 +497,27 @@ class IdentityTest(unittest.TestCase):
             return done.returncode, recorded.splitlines(), done.stderr
 
     def test_match(self):
-        self.assertEqual(self.verify(SHA, "strixd testing-770b6ecb521a"), 0)
+        self.assertEqual(self.verify(SHA, "strixd nightly-770b6ecb521a"), 0)
 
     def test_label_mismatch_fails(self):
-        self.assertNotEqual(self.verify(OTHER, "strixd testing-770b6ecb521a"), 0)
+        self.assertNotEqual(self.verify(OTHER, "strixd nightly-770b6ecb521a"), 0)
 
     def test_version_mismatch_fails(self):
         self.assertNotEqual(self.verify(SHA, "strixd testing"), 0)
-        self.assertNotEqual(self.verify(SHA, "strixd testing-d59e77d6b9af"), 0)
+        self.assertNotEqual(self.verify(SHA, "strixd nightly-d59e77d6b9af"), 0)
 
     def test_run_failure_fails(self):
         self.assertNotEqual(
-            self.verify(SHA, "strixd testing-770b6ecb521a", run_rc=1), 0
+            self.verify(SHA, "strixd nightly-770b6ecb521a", run_rc=1), 0
         )
 
     def test_registry_unreachable_fails(self):
         self.assertNotEqual(
-            self.verify(SHA, "strixd testing-770b6ecb521a", inspect_rc=1), 0
+            self.verify(SHA, "strixd nightly-770b6ecb521a", inspect_rc=1), 0
         )
 
     def test_unbound_ref_fails(self):
-        self.assertNotEqual(self.verify("main", "strixd testing-main", ref="main"), 0)
+        self.assertNotEqual(self.verify("main", "strixd nightly-main", ref="main"), 0)
 
     @staticmethod
     def run_name(calls):
@@ -437,12 +535,12 @@ class IdentityTest(unittest.TestCase):
         self.assertIn(f"rm -f {name}", calls)
 
     def test_run_failure_force_removes_named_container(self):
-        rc, calls = self.verify_calls(SHA, "strixd testing-770b6ecb521a", run_rc=1)
+        rc, calls = self.verify_calls(SHA, "strixd nightly-770b6ecb521a", run_rc=1)
         self.assertNotEqual(rc, 0)
         self.assertIn(f"rm -f {self.run_name(calls)}", calls)
 
     def test_success_does_not_remove_container(self):
-        rc, calls = self.verify_calls(SHA, "strixd testing-770b6ecb521a")
+        rc, calls = self.verify_calls(SHA, "strixd nightly-770b6ecb521a")
         self.assertEqual(rc, 0)
         self.assertFalse(any(line.startswith("rm ") for line in calls), calls)
 
@@ -464,7 +562,7 @@ class IdentityTest(unittest.TestCase):
             self.assertIn(f"rm -f {name}", calls)
 
     def test_failure_branches_print_one_reason_line(self):
-        rc, _, err = self.verify_full(OTHER, "strixd testing-770b6ecb521a")
+        rc, _, err = self.verify_full(OTHER, "strixd nightly-770b6ecb521a")
         self.assertNotEqual(rc, 0)
         self.assertEqual(
             err,
@@ -477,18 +575,18 @@ class IdentityTest(unittest.TestCase):
         )
         rc, _, err = self.verify_full(SHA, "", run_rc=124)
         self.assertEqual(err, "identity: docker run failed rc=124\n")
-        rc, _, err = self.verify_full(SHA, "strixd testing-770b6ecb521a", run_rc=1)
+        rc, _, err = self.verify_full(SHA, "strixd nightly-770b6ecb521a", run_rc=1)
         self.assertEqual(err, "identity: docker run failed rc=1\n")
         rc, _, err = self.verify_full(SHA, "strixd testing")
         self.assertNotEqual(rc, 0)
         self.assertEqual(
             err,
             "identity: version mismatch: got 'strixd testing' "
-            "want 'strixd testing-770b6ecb521a'\n",
+            "want 'strixd nightly-770b6ecb521a'\n",
         )
 
     def test_success_prints_nothing_on_stderr(self):
-        rc, _, err = self.verify_full(SHA, "strixd testing-770b6ecb521a")
+        rc, _, err = self.verify_full(SHA, "strixd nightly-770b6ecb521a")
         self.assertEqual(rc, 0)
         self.assertEqual(err, "")
 
