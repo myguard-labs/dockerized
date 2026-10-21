@@ -38,6 +38,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://deb.myguard.nl:8888 ${DIST} main" > /etc/apt/sources.list.d/deb.myguard.nl.list ;\
     apt-get update ;\
     apt-get -y -o Dpkg::Options::=--force-confnew -o Dpkg::Options::=--force-confmiss upgrade ;\
+    # Server package before lua-resty: lua-resty-core's Lua ABI alternatives list
+    # the first provider's server first, and apt only resolves to this server's Lua
+    # module when it is already marked for install (Angie builds pulled in the other).
     apt-get -y --no-install-recommends install \
       brotli \
       curl \
@@ -49,10 +52,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       lua-http \
       lua-socket \
       lua-zlib \
+      angie-full \
       lua-resty \
       libmimalloc3 \
       modsecurity-crs \
-      angie-full \
       openssl \
       ssl-cert \
       zstd ;\
