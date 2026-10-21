@@ -182,7 +182,7 @@ fi
 # targets with `bake --print`. Adding a target to a layer group in the HCL is all
 # that's needed to include it in the daily — no edit here.
 #   Layer 1: base images (FROM official upstream only)
-#   Layer 2: PHP-FPM (56/74/80/82/84/85/multi) + databases
+#   Layer 2: PHP-FPM (56/74/80/82/84/85/86/multi) + databases
 #   Layer 3: web servers WITH PHP (nginx/angie/apache × PHP versions)
 #   Layer 4: bare web servers + mail/db-less services
 declare -a LAYER_GROUPS=(

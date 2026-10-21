@@ -137,6 +137,7 @@ RUN rm -rf /tmp/* ;\
     rm -rf /etc/php/8.3 /usr/lib/php/20230831 ;\
     rm -rf /etc/php/8.4 /usr/lib/php/20240924 ;\
     #rm -rf /etc/php/8.5 /usr/lib/php/20250925 ;\
+    rm -rf /etc/php/8.6 /usr/lib/php/20260924 ;\
     # Privilege-separate every installed PHP-FPM pool: workers run as \
     # `phpfpm`, the listen socket is owned by phpfpm but readable by \
     # www-data (the web server). Done BEFORE the mv to /etc/php.orig so \

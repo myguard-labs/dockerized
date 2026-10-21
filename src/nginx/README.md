@@ -36,6 +36,7 @@ breaking other people's `docker-compose.yml` is rude). Debian tags are prefixed
 |---|---|---|
 | `latest` / `deb-latest` | Ubuntu (rolling) / Debian (trixie) | none |
 | `php8.5` / `deb-php8.5` | Ubuntu / Debian | PHP-FPM 8.5 |
+| `php8.6` / `deb-php8.6` | Ubuntu / Debian | PHP-FPM 8.6 (release candidate) |
 | `php8.4` … `php5.6` (+ `deb-`) | Ubuntu / Debian | that PHP version |
 | `multi` / `deb-multi` | Ubuntu / Debian | multi-version PHP-FPM (pick via `PHPxx=YES`) |
 
@@ -95,7 +96,7 @@ legacy app you swear you'll rewrite "next quarter."
 | `NGX_MODULES` (or `MODULES`) | comma-separated modules to enable; unset = all (don't) |
 | `PHPVERSION` | set on PHP images; `MULTI` on multi images |
 | `MODE` | `FPM` (single) or `MULTI` |
-| `PHP56`/`PHP74`/`PHP80`/`PHP81`/`PHP82`/`PHP83`/`PHP84`/`PHP85` | `YES` to start that PHP-FPM on a `multi` image |
+| `PHP56`/`PHP74`/`PHP80`/`PHP81`/`PHP82`/`PHP83`/`PHP84`/`PHP85`/`PHP86` | `YES` to start that PHP-FPM on a `multi` image |
 
 ## Quick start
 

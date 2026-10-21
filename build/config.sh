@@ -47,7 +47,7 @@ export IMAGE_PREFIX_APACHE="apache-phpfpm"
 # ============================================================================
 # Used by: php-fpm/.generate.sh, nginx/.generate.sh, apache-phpfpm/.generate.sh
 
-declare -ga PHP_VERSIONS=(5.6 7.4 8.0 8.2 8.4 8.5)
+declare -ga PHP_VERSIONS=(5.6 7.4 8.0 8.2 8.4 8.5 8.6)
 
 # ============================================================================
 # REPOSITORY INFORMATION
@@ -108,4 +108,5 @@ declare -gA PHP_UBUNTU_MISSING_CUTOFF=(
 declare -gA PHP_VERSION_MISSING_EXTS=(
     [5.6]="igbinary imagick memcache memcached redis zstd snuffleupagus"
     [8.5]="opcache"
+    [8.6]="apcu igbinary imagick imap memcache memcached opcache pspell redis zstd snuffleupagus"
 )

@@ -141,10 +141,13 @@ if [ -n "${PHPVERSION}" ]; then
     if [ "${MODE}" = "MULTI" ] && [ "${PHP85}" = "YES" ]; then
         startphp "8.5"
     fi
+    if [ "${MODE}" = "MULTI" ] && [ "${PHP86}" = "YES" ]; then
+        startphp "8.6"
+    fi
     if [ "${PHPVERSION}" = "MULTI" ] && [ "${SETPHP}" = 0 ]; then
         echo "[NGINX] --->"
         echo "[NGINX] ---> You have obtained the MULTI-PHP version of the Docker, however..."
-        echo "[NGINX] ---> No environment variable for PHP56, PHP74, PHP80, PHP81, PHP82, PHP83, PHP84, or PHP85 has been set"
+        echo "[NGINX] ---> No environment variable for PHP56, PHP74, PHP80, PHP81, PHP82, PHP83, PHP84, PHP85, or PHP86 has been set"
         echo "[NGINX] ---> Uncertain of the next steps, the process will now exit..."
         echo "[NGINX] --->"
         exit

@@ -1,8 +1,9 @@
-# PHP-FPM — hardened FastCGI Process Manager images (Debian, PHP 5.6 → 8.5)
+# PHP-FPM — hardened FastCGI Process Manager images (Debian, PHP 5.6 → 8.6)
 
 `eilandert/php-fpm` is a family of security-hardened **PHP-FPM** Docker images
-spanning six PHP branches — `5.6`, `7.4`, `8.0`, `8.2`, `8.4`, `8.5` — on Debian
-and Ubuntu bases. They are built from the PHP packages on
+spanning seven PHP branches — `5.6`, `7.4`, `8.0`, `8.2`, `8.4`, `8.5`, `8.6` — on
+Debian and Ubuntu bases (`8.6` tracks the upstream release candidate and ships
+core extensions only until the PECL extras are packaged). They are built from the PHP packages on
 **[deb.myguard.nl](https://deb.myguard.nl)** and pair with the `nginx`, `angie`
 and `apache-phpfpm` images in this project to serve any PHP application.
 

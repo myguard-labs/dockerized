@@ -1,0 +1,127 @@
+# syntax=docker/dockerfile:1.7
+FROM    docker.io/eilandert/php-fpm:8.6
+# Supply-chain / provenance args, injected by docker-bake.hcl at build time.
+ARG     VCS_REF=unknown
+ARG     BUILD_DATE=unknown
+LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>" \
+        org.opencontainers.image.title="Angie with ModSecurity & PageSpeed" \
+        org.opencontainers.image.description="Hardened high-performance web server with security and optimization modules" \
+        org.opencontainers.image.url="https://github.com/myguard-labs/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized/tree/master/src/angie" \
+        org.opencontainers.image.documentation="https://deb.myguard.nl/angie-dockerized/" \
+        org.opencontainers.image.vendor="MyGuard" \
+        org.opencontainers.image.licenses="BSD-2-Clause" \
+        org.opencontainers.image.version="8.6" \
+        org.opencontainers.image.revision="${VCS_REF}" \
+        org.opencontainers.image.created="${BUILD_DATE}"
+ENV     DEBIAN_FRONTEND="noninteractive"
+
+# s6-overlay supervises php-fpm + angie (PID1 reaps + restarts). The old
+# monolithic bootstrap.sh is split: setup → s6 oneshot init-bootstrap; the
+# long-running processes (php-fpm, angie, nullmailer, 24h ticket-reload) are
+# s6 longruns. A kill -9'd php-fpm master is now respawned in ~1s instead of
+# leaving a silent outage. See PLAN-s6-fpm-supervision.md.
+ARG     S6_OVERLAY_VERSION=3.2.1.0
+COPY --chmod=0755 healthcheck.sh /healthcheck.sh
+COPY    healthz.conf /healthz.conf
+COPY    default.conf-example /default.conf-example
+COPY    s6-rc.d/ /etc/s6-overlay/s6-rc.d/
+COPY --chmod=0755 s6-scripts/init-bootstrap.sh /etc/s6-overlay/scripts/init-bootstrap.sh
+
+# BuildKit cache mounts: apt lists+archives are kept on cache mounts (not in
+# image layers), so we keep the docker-clean stub removal and skip the
+# rm -rf /var/lib/apt/lists/* at the end — the mount handles it.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    set -ex ;\
+    rm -f /etc/apt/apt.conf.d/docker-clean ;\
+    echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://deb.myguard.nl:8888 ${DIST} main" > /etc/apt/sources.list.d/deb.myguard.nl.list ;\
+    apt-get update ;\
+    apt-get -y -o Dpkg::Options::=--force-confnew -o Dpkg::Options::=--force-confmiss upgrade ;\
+    # Server package before lua-resty: lua-resty-core's Lua ABI alternatives list
+    # the first provider's server first, and apt only resolves to this server's Lua
+    # module when it is already marked for install (Angie builds pulled in the other).
+    apt-get -y --no-install-recommends install \
+      brotli \
+      curl \
+      fcgiwrap \
+      xz-utils \
+      geoip-bin \
+      libjemalloc2 \
+      libluajit-5.1-2 \
+      lua-http \
+      lua-socket \
+      lua-zlib \
+      angie-full \
+      lua-resty \
+      libmimalloc3 \
+      modsecurity-crs \
+      openssl \
+      ssl-cert \
+      zstd ;\
+    mv /etc/angie /etc/angie.orig ;\
+    mv /etc/modsecurity /etc/modsecurity.orig ;\
+    mkdir -p /etc/angie /etc/modsecurity ;\
+    install -m 0644 /healthz.conf /etc/angie.orig/sites-enabled/healthz ;\
+    # Example default vhost: kept in sites-available, and enabled by default so \
+    # the container serves HTTPS (snakeoil) out-of-the-box with no certs mounted. \
+    mkdir -p /etc/angie.orig/sites-available ;\
+    install -m 0644 /default.conf-example /etc/angie.orig/sites-available/default.conf-example ;\
+    install -m 0644 /default.conf-example /etc/angie.orig/sites-enabled/default.conf ;\
+    # angie-common.postinst already symlinked sites-enabled/default -> the \
+    # package default vhost (also a `listen 80 default_server`). Drop it so it \
+    # doesn't collide with our default.conf -> "duplicate default server :80". \
+    rm -f /etc/angie.orig/sites-enabled/default ;\
+    rm -f /healthz.conf /default.conf-example /var/spool/nullmailer/trigger ;\
+    # The angie-full package already ships its own snippets/ (ssl-labs-aplus, \
+    # security, cloudflare, proxy, …) into /etc/angie; we don't bundle our own. \
+    # ---- HARDENING ---- \
+    # Tighten perms on config dirs (master is root; workers drop to www-data) \
+    chown -R root:www-data /etc/angie.orig /etc/modsecurity.orig ;\
+    chmod -R go-w /etc/angie.orig /etc/modsecurity.orig ;\
+    # Pre-create writable dirs with restrictive perms \
+    install -d -m 0750 -o www-data -g www-data /var/cache/angie /var/log/angie ;\
+    # Drop any setuid/setgid bits the install pulled in \
+    find /usr -xdev \( -perm -4000 -o -perm -2000 \) -type f -exec chmod a-s {} \; 2>/dev/null || true ;\
+    # ---- s6-overlay (PID1 process supervisor) ---- \
+    # Fetch the noarch + per-arch tarballs for the build target arch and unpack \
+    # to /. dpkg arch -> s6 arch name. \
+    S6_ARCH="$(dpkg --print-architecture)" ;\
+    case "${S6_ARCH}" in \
+      amd64) S6_ARCH=x86_64 ;; \
+      arm64) S6_ARCH=aarch64 ;; \
+      armhf) S6_ARCH=arm ;; \
+    esac ;\
+    curl -fsSL -o /tmp/s6-noarch.tar.xz "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" ;\
+    curl -fsSL -o /tmp/s6-arch.tar.xz   "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" ;\
+    tar -C / -Jxpf /tmp/s6-noarch.tar.xz ;\
+    tar -C / -Jxpf /tmp/s6-arch.tar.xz ;\
+    rm -f /tmp/s6-noarch.tar.xz /tmp/s6-arch.tar.xz ;\
+    chmod 0755 /etc/s6-overlay/s6-rc.d/php-fpm/run \
+               /etc/s6-overlay/s6-rc.d/angie/run \
+               /etc/s6-overlay/s6-rc.d/nullmailer/run \
+               /etc/s6-overlay/s6-rc.d/ticket-reload/run \
+               /etc/s6-overlay/s6-rc.d/fpm-watch/run \
+               /etc/s6-overlay/scripts/init-bootstrap.sh
+
+WORKDIR /etc/angie
+EXPOSE  80
+EXPOSE  443
+EXPOSE  443/udp
+
+# s6: keep the container env for service run scripts; don't time out waiting for
+# longruns; abort the boot if stage2 (our services) fails so a broken config is
+# loud, matching the old bootstrap FATAL behaviour.
+ENV     S6_KEEP_ENV=1 \
+        S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
+        S6_BEHAVIOUR_IF_STAGE2_FAILS=2
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD /healthcheck.sh || exit 1
+
+# s6 handles graceful shutdown of services (angie gets SIGQUIT via its service
+# down-signal); the container itself takes SIGTERM.
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["/init"]
+CMD     []

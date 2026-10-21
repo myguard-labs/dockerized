@@ -13,7 +13,7 @@ Want to chat, file bugs, suggest a module? Join the Discord: **[discord.gg/UQNsF
 Numbers are derived from `build/config.sh` and `docker-bake.hcl` — run the commands yourself to confirm.
 
 - **Base distros:** Ubuntu `resolute` (rolling) and Debian `trixie`, plus a few Alpine targets where it matters (rspamd, letsencrypt, unbound)
-- **PHP versions:** `5.6`, `7.4`, `8.0`, `8.2`, `8.4`, `8.5` (six branches; see `PHP_VERSIONS` in [build/config.sh](build/config.sh))
+- **PHP versions:** `5.6`, `7.4`, `8.0`, `8.2`, `8.4`, `8.5`, `8.6` (seven branches; see `PHP_VERSIONS` in [build/config.sh](build/config.sh))
 - **Build targets:** **89** — one image variant each; count with `grep -c '^target ' docker-bake.hcl`
 - **Source components:** **24** subdirectories under [src/](src/), one per service
 - **Registry prefix:** `docker.io/eilandert/<image>` (see `DOCKER_REGISTRY_PREFIX` in `build/config.sh`)
@@ -33,7 +33,7 @@ dockerized/
 │   └── monitor-builds.sh    # tail/inspect helper for long bake runs
 └── src/                     # one directory per component (24 total) — this is where you make changes
     ├── base/                       # ubuntu-base + debian-base (everything else builds on these)
-    ├── php-fpm/                    # php-fpm 5.6 … 8.5, both distros
+    ├── php-fpm/                    # php-fpm 5.6 … 8.6, both distros
     ├── nginx/                      # nginx + ModSecurity3 + PageSpeed (matches deb.myguard.nl nginx)
     ├── angie/                      # Angie-nextgen build (matches deb.myguard.nl angie)
     ├── apache-phpfpm/              # Apache + PHP-FPM

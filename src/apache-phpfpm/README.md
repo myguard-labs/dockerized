@@ -1,11 +1,11 @@
-# Apache + PHP-FPM — hardened web + PHP image (Debian, PHP 5.6 → 8.5)
+# Apache + PHP-FPM — hardened web + PHP image (Debian, PHP 5.6 → 8.6)
 
 `eilandert/apache-phpfpm` bundles the **Apache HTTP Server** with **PHP-FPM** over
 `mod_proxy_fcgi`, built from the packages on
 **[deb.myguard.nl](https://deb.myguard.nl)**. It's the drop-in choice for PHP
 applications that expect Apache semantics — `.htaccess`, `mod_rewrite`,
-per-directory overrides — across six PHP branches (`5.6`, `7.4`, `8.0`, `8.2`,
-`8.4`, `8.5`).
+per-directory overrides — across seven PHP branches (`5.6`, `7.4`, `8.0`, `8.2`,
+`8.4`, `8.5`, `8.6`; `8.6` is a release candidate).
 
 Where available, PHP is hardened at runtime with **Snuffleupagus**.
 

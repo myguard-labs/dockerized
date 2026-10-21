@@ -42,9 +42,9 @@ target "_meta" {
 # ---------------------------------------------------------------------------
 # Generated web/php-fpm targets (bake matrix)
 #
-# The 48 per-(distro x PHP-version) targets for php-fpm, nginx, angie and
-# apache are mechanical over {ubuntu,debian} x {5.6,7.4,8.0,8.2,8.4,8.5}, so
-# they are expressed as bake `matrix` targets instead of 48 hand-written
+# The 56 per-(distro x PHP-version) targets for php-fpm, nginx, angie and
+# apache are mechanical over {ubuntu,debian} x {5.6,7.4,8.0,8.2,8.4,8.5,8.6}, so
+# they are expressed as bake `matrix` targets instead of 56 hand-written
 # blocks. The `name` attribute reproduces the exact previous target names
 # (e.g. ubuntu-nginx-php84). The `multi` variants and the bare (no-PHP)
 # nginx/angie targets are irregular (naming + tags) and stay hand-written.
@@ -62,6 +62,7 @@ variable "PHP_MATRIX" {
     { v = "8.2", nn = "82" },
     { v = "8.4", nn = "84" },
     { v = "8.5", nn = "85" },
+    { v = "8.6", nn = "86" },
   ]
 }
 
@@ -224,7 +225,7 @@ group "debian" {
 group "debian-phpfpm" {
     targets = [
         "debian-phpfpm56", "debian-phpfpm74", "debian-phpfpm80",
-        "debian-phpfpm82", "debian-phpfpm84", "debian-phpfpm85",
+        "debian-phpfpm82", "debian-phpfpm84", "debian-phpfpm85", "debian-phpfpm86",
         "debian-multiphp",
     ]
 }
@@ -233,7 +234,7 @@ group "debian-nginx-all" {
     targets = [
         "debian-nginx",
         "debian-nginx-php56", "debian-nginx-php74", "debian-nginx-php80",
-        "debian-nginx-php82", "debian-nginx-php84", "debian-nginx-php85",
+        "debian-nginx-php82", "debian-nginx-php84", "debian-nginx-php85", "debian-nginx-php86",
         "debian-nginx-multi",
     ]
 }
@@ -241,7 +242,7 @@ group "debian-nginx-all" {
 group "debian-nginx-php" {
     targets = [
         "debian-nginx-php56", "debian-nginx-php74", "debian-nginx-php80",
-        "debian-nginx-php82", "debian-nginx-php84", "debian-nginx-php85",
+        "debian-nginx-php82", "debian-nginx-php84", "debian-nginx-php85", "debian-nginx-php86",
         "debian-nginx-multi",
     ]
 }
@@ -250,7 +251,7 @@ group "debian-angie-all" {
     targets = [
         "debian-angie",
         "debian-angie-php56", "debian-angie-php74", "debian-angie-php80",
-        "debian-angie-php82", "debian-angie-php84", "debian-angie-php85",
+        "debian-angie-php82", "debian-angie-php84", "debian-angie-php85", "debian-angie-php86",
         "debian-angie-multi",
         "debian-angie-cms",
     ]
@@ -259,7 +260,7 @@ group "debian-angie-all" {
 group "debian-angie-php" {
     targets = [
         "debian-angie-php56", "debian-angie-php74", "debian-angie-php80",
-        "debian-angie-php82", "debian-angie-php84", "debian-angie-php85",
+        "debian-angie-php82", "debian-angie-php84", "debian-angie-php85", "debian-angie-php86",
         "debian-angie-multi",
     ]
 }
@@ -267,7 +268,7 @@ group "debian-angie-php" {
 group "debian-apache" {
     targets = [
         "debian-apache-php56", "debian-apache-php74", "debian-apache-php80",
-        "debian-apache-php82", "debian-apache-php84", "debian-apache-php85",
+        "debian-apache-php82", "debian-apache-php84", "debian-apache-php85", "debian-apache-php86",
         "debian-apache-multiphp",
     ]
 }
@@ -293,7 +294,7 @@ group "ubuntu" {
 group "ubuntu-phpfpm" {
     targets = [
         "ubuntu-phpfpm56", "ubuntu-phpfpm74", "ubuntu-phpfpm80",
-        "ubuntu-phpfpm82", "ubuntu-phpfpm84", "ubuntu-phpfpm85",
+        "ubuntu-phpfpm82", "ubuntu-phpfpm84", "ubuntu-phpfpm85", "ubuntu-phpfpm86",
         "ubuntu-multiphp",
     ]
 }
@@ -302,7 +303,7 @@ group "ubuntu-nginx-all" {
     targets = [
         "ubuntu-nginx",
         "ubuntu-nginx-php56", "ubuntu-nginx-php74", "ubuntu-nginx-php80",
-        "ubuntu-nginx-php82", "ubuntu-nginx-php84", "ubuntu-nginx-php85",
+        "ubuntu-nginx-php82", "ubuntu-nginx-php84", "ubuntu-nginx-php85", "ubuntu-nginx-php86",
         "ubuntu-nginx-multi",
     ]
 }
@@ -310,7 +311,7 @@ group "ubuntu-nginx-all" {
 group "ubuntu-nginx-php" {
     targets = [
         "ubuntu-nginx-php56", "ubuntu-nginx-php74", "ubuntu-nginx-php80",
-        "ubuntu-nginx-php82", "ubuntu-nginx-php84", "ubuntu-nginx-php85",
+        "ubuntu-nginx-php82", "ubuntu-nginx-php84", "ubuntu-nginx-php85", "ubuntu-nginx-php86",
         "ubuntu-nginx-multi",
     ]
 }
@@ -319,7 +320,7 @@ group "ubuntu-angie-all" {
     targets = [
         "ubuntu-angie",
         "ubuntu-angie-php56", "ubuntu-angie-php74", "ubuntu-angie-php80",
-        "ubuntu-angie-php82", "ubuntu-angie-php84", "ubuntu-angie-php85",
+        "ubuntu-angie-php82", "ubuntu-angie-php84", "ubuntu-angie-php85", "ubuntu-angie-php86",
         "ubuntu-angie-multi",
     ]
 }
@@ -327,7 +328,7 @@ group "ubuntu-angie-all" {
 group "ubuntu-angie-php" {
     targets = [
         "ubuntu-angie-php56", "ubuntu-angie-php74", "ubuntu-angie-php80",
-        "ubuntu-angie-php82", "ubuntu-angie-php84", "ubuntu-angie-php85",
+        "ubuntu-angie-php82", "ubuntu-angie-php84", "ubuntu-angie-php85", "ubuntu-angie-php86",
         "ubuntu-angie-multi",
     ]
 }
@@ -335,7 +336,7 @@ group "ubuntu-angie-php" {
 group "ubuntu-apache" {
     targets = [
         "ubuntu-apache-php56", "ubuntu-apache-php74", "ubuntu-apache-php80",
-        "ubuntu-apache-php82", "ubuntu-apache-php84", "ubuntu-apache-php85",
+        "ubuntu-apache-php82", "ubuntu-apache-php84", "ubuntu-apache-php85", "ubuntu-apache-php86",
         "ubuntu-apache-multiphp",
     ]
 }

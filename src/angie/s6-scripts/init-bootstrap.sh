@@ -74,7 +74,7 @@ if [ -n "${PHPVERSION:-}" ]; then
     # not exist yet — angie resolves the path at request time, after fpm starts.
     _hzver="${PHPVERSION}"
     if [ "${MODE:-}" = "MULTI" ]; then
-        for v in 8.5:PHP85 8.4:PHP84 8.3:PHP83 8.2:PHP82 8.1:PHP81 \
+        for v in 8.6:PHP86 8.5:PHP85 8.4:PHP84 8.3:PHP83 8.2:PHP82 8.1:PHP81 \
                  8.0:PHP80 7.4:PHP74 7.2:PHP72 5.6:PHP56; do
             ver="${v%%:*}"; var="${v##*:}"; eval "val=\${$var:-}"
             [ "${val}" = "YES" ] && { _hzver="${ver}"; break; }
@@ -121,7 +121,7 @@ if [ -n "${PHPVERSION:-}" ]; then
     if [ "${MODE:-}" = "MULTI" ]; then
         SETPHP=0
         for v in 5.6:PHP56 7.2:PHP72 7.4:PHP74 8.0:PHP80 8.1:PHP81 \
-                 8.2:PHP82 8.3:PHP83 8.4:PHP84 8.5:PHP85; do
+                 8.2:PHP82 8.3:PHP83 8.4:PHP84 8.5:PHP85 8.6:PHP86; do
             ver="${v%%:*}"; var="${v##*:}"
             eval "val=\${$var:-}"
             [ "${val}" = "YES" ] && { copy_php_cfg "${ver}"; SETPHP=1; }

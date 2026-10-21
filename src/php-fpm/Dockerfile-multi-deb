@@ -314,6 +314,40 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.5-snuffleupagus \
       php8.5-zip
 
+# Package list source-of-truth. The generator strips lines per PHP version
+# and per distro via build/config.sh:
+#   - #removedinphpXY# markers      -> per-version, both distros
+#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
+#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
+#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
+# Do NOT add bare "#" comments inside the apt list: bash treats the joined
+# RUN line as one command and silently drops everything after the first "#".
+# dom/exif are NOT separate packages on any supported distro — they are part
+# of php<ver>-xml / php<ver>-common, so don't add them back.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    set -xe ;\
+    apt-get update ;\
+    apt-get install -y --no-install-recommends \
+      php8.6 \
+      php8.6-fpm \
+      php8.6-bcmath \
+      php8.6-cli \
+      php8.6-curl \
+      php8.6-gd \
+      php8.6-gmp \
+      php8.6-intl \
+      php8.6-ldap \
+      php8.6-mbstring \
+      php8.6-mysql \
+      php8.6-pgsql \
+      php8.6-readline \
+      php8.6-soap \
+      php8.6-sqlite3 \
+      php8.6-tidy \
+      php8.6-xml \
+      php8.6-zip
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     set -ex ;\
@@ -359,6 +393,7 @@ RUN rm -rf /tmp/* ;\
     #rm -rf /etc/php/8.3 /usr/lib/php/20230831 ;\
     #rm -rf /etc/php/8.4 /usr/lib/php/20240924 ;\
     #rm -rf /etc/php/8.5 /usr/lib/php/20250925 ;\
+    #rm -rf /etc/php/8.6 /usr/lib/php/20260924 ;\
     # Privilege-separate every installed PHP-FPM pool: workers run as \
     # `phpfpm`, the listen socket is owned by phpfpm but readable by \
     # www-data (the web server). Done BEFORE the mv to /etc/php.orig so \

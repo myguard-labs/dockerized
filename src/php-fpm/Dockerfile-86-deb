@@ -1,0 +1,420 @@
+# syntax=docker/dockerfile:1.7
+# This file might be outdated, see https://github.com/myguard-labs/dockerized/tree/master/php-fpm for a recent one
+FROM    docker.io/eilandert/debian-base:stable
+LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>" \
+        org.opencontainers.image.title="PHP-FPM" \
+        org.opencontainers.image.description="PHP-FPM FastCGI Process Manager" \
+        org.opencontainers.image.url="https://github.com/myguard-labs/dockerized" \
+        org.opencontainers.image.source="https://github.com/myguard-labs/dockerized/tree/master/php-fpm" \
+        org.opencontainers.image.vendor="MyGuard" \
+        org.opencontainers.image.version="8.6"
+ENV     DEBIAN_FRONTEND="noninteractive" \
+        TZ=Europe/Amsterdam \
+        PHPVERSION=8.6 \
+        MODE=FPM
+
+COPY --chmod=0755 bootstrap.sh /bootstrap.sh
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    set -ex ;\
+    rm -f /etc/apt/apt.conf.d/docker-clean ;\
+    echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://edge.deb.myguard.nl:8888/mirror/ondrej-php ${DIST} main" > /etc/apt/sources.list.d/ondrej-ppa.list ;\
+    apt-get -y update ;\
+    apt-get install -y --no-install-recommends nullmailer mailutils ;\
+    rm -rf /var/spool/nullmailer/trigger ;\
+    # Dedicated PHP-FPM worker user. Kept OUT of the www-data group so a \
+    # compromised PHP process cannot invoke any setuid binary locked to \
+    # root:www-data (e.g. sudo in the cms image). The web server still \
+    # runs as www-data and reaches the FPM socket via listen.group=www-data. \
+    groupadd --system --gid 1500 phpfpm ;\
+    useradd  --system --uid 1500 --gid 1500 \
+             --home-dir /var/www --shell /usr/sbin/nologin \
+             --comment "PHP-FPM worker" phpfpm ;\
+    # Operator / AI-agent account. Membership of: \
+    #   - www-data → can READ /var/www (mode 2750 phpfpm:www-data) \
+    #   - sudo     → can EXECUTE /usr/bin/sudo (mode 4750 root:sudo) \
+    # The web server (also www-data) is NOT in the sudo group, so the \
+    # sudo binary is unreachable from web processes. PHP workers (phpfpm) \
+    # are in neither group. Pre-create the `sudo` group here so we can add \
+    # agent to it before the sudo package is installed in the footer. \
+    # (The apt sudo package will adopt the pre-existing group.) \
+    groupadd --system sudo 2>/dev/null || true ;\
+    groupadd --system --gid 1501 agent ;\
+    useradd  --uid 1501 --gid 1501 \
+             --groups www-data,sudo \
+             --home-dir /home/agent --create-home \
+             --shell /bin/bash \
+             --comment "Operator / AI agent" agent ;\
+    install -d -m 0700 -o agent -g agent /home/agent/.ssh
+
+# Package list source-of-truth. The generator strips lines per PHP version
+# and per distro via build/config.sh:
+#   - #removedinphpXY# markers      -> per-version, both distros
+#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
+#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
+#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
+# Do NOT add bare "#" comments inside the apt list: bash treats the joined
+# RUN line as one command and silently drops everything after the first "#".
+# dom/exif are NOT separate packages on any supported distro — they are part
+# of php<ver>-xml / php<ver>-common, so don't add them back.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    set -xe ;\
+    apt-get update ;\
+    apt-get install -y --no-install-recommends \
+      php8.6 \
+      php8.6-fpm \
+      php8.6-bcmath \
+      php8.6-cli \
+      php8.6-curl \
+      php8.6-gd \
+      php8.6-gmp \
+      php8.6-intl \
+      php8.6-ldap \
+      php8.6-mbstring \
+      php8.6-mysql \
+      php8.6-pgsql \
+      php8.6-readline \
+      php8.6-soap \
+      php8.6-sqlite3 \
+      php8.6-tidy \
+      php8.6-xml \
+      php8.6-zip
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    set -ex ;\
+    cd /tmp ;\
+    /usr/bin/php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" ;\
+    /usr/bin/php composer-setup.php --filename=composer --install-dir=/usr/bin ;\
+    /usr/bin/php -r "unlink('composer-setup.php');" ;\
+    /usr/bin/php -r "copy('https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar', '/usr/bin/wp');" ;\
+    chmod 0755 /usr/bin/wp /usr/bin/composer ;\
+    # ---- sudo: re-installed (base strips it) and locked down ---- \
+    # Binary perm 4750 root:sudo → only root and members of the `sudo` \
+    # group can execute it. Only `agent` is in the sudo group. www-data \
+    # (web server) and phpfpm (PHP workers) cannot reach the binary AT \
+    # ALL — defense in depth on top of the sudoers entry below. \
+    # `apt-get update` here is required: /var/lib/apt is a buildkit cache \
+    # mount with sharing=locked across all bake targets, so a sibling debian \
+    # build can clobber the ubuntu apt lists between RUN steps, leaving us \
+    # unable to locate sudo. \
+    apt-get -y update ;\
+    apt-get install -y --no-install-recommends sudo ;\
+    chmod 4750 /usr/bin/sudo ;\
+    chown root:sudo /usr/bin/sudo ;\
+    # sudoers grants passwordless ALL=(ALL) to `agent` only. www-data the \
+    # user has no entry, so even though the web server can execute the \
+    # binary, sudo refuses to authorise it. Validate with visudo -c -f. \
+    install -d -m 0750 /etc/sudoers.d ;\
+    printf 'Defaults  env_reset\nDefaults  secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"\nagent ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/10-agent ;\
+    chmod 0440 /etc/sudoers.d/10-agent ;\
+    visudo -c -f /etc/sudoers.d/10-agent
+
+# Per-version rm lines: the generator either keeps them (multi) or comments
+# out the active version's line (single) via sed. Do not collapse into a loop.
+RUN rm -rf /tmp/* ;\
+    rm -rf /etc/php/5.6 /usr/lib/php/20131226 ;\
+    rm -rf /etc/php/7.0 /usr/lib/php/20151012 ;\
+    rm -rf /etc/php/7.1 /usr/lib/php/20160303 ;\
+    rm -rf /etc/php/7.2 /usr/lib/php/20170718 ;\
+    rm -rf /etc/php/7.3 /usr/lib/php/20180731 ;\
+    rm -rf /etc/php/7.4 /usr/lib/php/20190902 ;\
+    rm -rf /etc/php/8.0 /usr/lib/php/20200930 ;\
+    rm -rf /etc/php/8.1 /usr/lib/php/20210902 ;\
+    rm -rf /etc/php/8.2 /usr/lib/php/20220829 ;\
+    rm -rf /etc/php/8.3 /usr/lib/php/20230831 ;\
+    rm -rf /etc/php/8.4 /usr/lib/php/20240924 ;\
+    rm -rf /etc/php/8.5 /usr/lib/php/20250925 ;\
+    #rm -rf /etc/php/8.6 /usr/lib/php/20260924 ;\
+    # Privilege-separate every installed PHP-FPM pool: workers run as \
+    # `phpfpm`, the listen socket is owned by phpfpm but readable by \
+    # www-data (the web server). Done BEFORE the mv to /etc/php.orig so \
+    # the runtime cp /etc/php.orig/* /etc/php picks up the patched conf. \
+    for pool in /etc/php/*/fpm/pool.d/www.conf; do \
+        [ -f "$pool" ] || continue ; \
+        ver="$(basename "$(dirname "$(dirname "$(dirname "$pool")")")")" ; \
+        sed -ri \
+            -e 's|^;?user\s*=.*|user = phpfpm|' \
+            -e 's|^;?group\s*=.*|group = phpfpm|' \
+            -e 's|^;?listen\.owner\s*=.*|listen.owner = phpfpm|' \
+            -e 's|^;?listen\.group\s*=.*|listen.group = www-data|' \
+            -e 's|^;?listen\.mode\s*=.*|listen.mode = 0660|' \
+            -e 's|^;?security\.limit_extensions\s*=.*|security.limit_extensions = .php|' \
+            -e 's|^;?process\.dumpable\s*=.*|process.dumpable = no|' \
+            -e 's|^;?clear_env\s*=.*|clear_env = no|' \
+            "$pool" ; \
+        # Append hardened php_admin_value entries to every pool. Idempotent: \
+        # if the marker is already present, skip the append. \
+        # \
+        # NOTE: `disable_functions` is set HERE at pool level (not in any \
+        # global conf.d/*.ini), because it's PHP_INI_SYSTEM and processed \
+        # once in the FPM master — so a global disable_functions cannot be \
+        # re-enabled by the [agent] pool's `php_admin_value[disable_functions]=`. \
+        # Keep this list per-pool so the trusted [agent] pool can opt out. \
+        # Same reasoning for opcache, memory, upload sizes, sessions — pool- \
+        # specific values belong here, not in conf.d. \
+        if ! grep -q '^; --- myguard hardening ---' "$pool"; then \
+            { \
+                echo "" ; \
+                echo "; --- myguard hardening ---" ; \
+                echo "; Note: deliberately NOT disabling allow_url_fopen — Composer and" ; \
+                echo ";       WordPress core updates need it. allow_url_include is the" ; \
+                echo ";       dangerous one and stays off." ; \
+                echo "php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen,show_source,dl,pcntl_alarm,pcntl_fork,pcntl_waitpid,pcntl_wait,pcntl_signal,pcntl_signal_dispatch,pcntl_sigprocmask,pcntl_sigwaitinfo,pcntl_sigtimedwait,pcntl_exec" ; \
+                echo "php_admin_value[expose_php] = Off" ; \
+                echo "php_admin_value[allow_url_fopen] = On" ; \
+                echo "php_admin_value[allow_url_include] = Off" ; \
+                echo "; open_basedir confines this pool to the docroot + the dirs" ; \
+                echo "; PHP legitimately needs (tmp/uploads/sessions, PEAR libs)." ; \
+                echo "; Biggest containment win vs LFI / path traversal: a script" ; \
+                echo "; cannot fopen() /etc/passwd, other tenants' files, or /proc." ; \
+                echo "; Trailing slashes matter — they pin to the dir, not a prefix." ; \
+                echo "php_admin_value[open_basedir] = /var/www/:/tmp/:/run/php/:/usr/share/php/" ; \
+                echo "; Stop PHP advertising its version in the X-PHP/X-Powered-By" ; \
+                echo "; mail header on mail()-sent messages — minor info leak." ; \
+                echo "php_admin_flag[mail.add_x_header] = Off" ; \
+                echo "; cgi.fix_pathinfo=0 is the OWASP-blessed mitigation for" ; \
+                echo "; the classic /uploaded.jpg/anything.php confused-deputy" ; \
+                echo "; vector. nginx/apache configs also limit_extensions but" ; \
+                echo "; defense-in-depth — keep PHP from ever resolving it." ; \
+                echo "php_admin_value[cgi.fix_pathinfo] = 0" ; \
+                echo "; Hide argument values from stack traces (since PHP 7.4)." ; \
+                echo "; Stops accidental leak of secrets passed as function args." ; \
+                echo "php_admin_value[zend.exception_ignore_args] = 1" ; \
+                echo "; Compile out assert() — zero runtime cost in production." ; \
+                echo "php_admin_value[zend.assertions] = -1" ; \
+                echo "php_admin_value[session.use_strict_mode] = 1" ; \
+                echo "php_admin_value[session.use_only_cookies] = 1" ; \
+                echo "php_admin_value[session.cookie_httponly] = 1" ; \
+                echo "php_admin_value[session.cookie_secure] = 1" ; \
+                echo "php_admin_value[session.cookie_samesite] = Lax" ; \
+                echo "php_admin_value[session.sid_length] = 48" ; \
+                echo "php_admin_value[session.sid_bits_per_character] = 6" ; \
+                echo "php_admin_flag[log_errors] = on" ; \
+                echo "php_admin_flag[display_errors] = off" ; \
+                echo "php_admin_flag[display_startup_errors] = off" ; \
+                echo "php_admin_value[error_log] = /proc/self/fd/2" ; \
+                echo "" ; \
+                echo "; --- myguard [www] CMS-sized runtime tuning ---" ; \
+                echo "; Sized for CMS workloads; tune per-deployment if needed." ; \
+                echo "php_admin_value[memory_limit]        = 512M" ; \
+                echo "php_admin_value[max_execution_time]  = 120" ; \
+                echo "php_admin_value[max_input_time]      = 120" ; \
+                echo "php_admin_value[max_input_vars]      = 10000" ; \
+                echo "php_admin_value[upload_max_filesize] = 64M" ; \
+                echo "php_admin_value[post_max_size]       = 64M" ; \
+                echo "php_admin_value[max_file_uploads]    = 50" ; \
+                echo "php_admin_value[realpath_cache_size] = 4096k" ; \
+                echo "php_admin_value[realpath_cache_ttl]  = 600" ; \
+                echo "" ; \
+                echo "; --- OPcache (production: don't stat .php on every hit) ---" ; \
+                echo "php_admin_value[opcache.enable]                  = 1" ; \
+                echo "php_admin_value[opcache.enable_cli]              = 0" ; \
+                echo "php_admin_value[opcache.memory_consumption]      = 256" ; \
+                echo "php_admin_value[opcache.interned_strings_buffer] = 32" ; \
+                echo "php_admin_value[opcache.max_accelerated_files]   = 20000" ; \
+                echo "php_admin_value[opcache.max_wasted_percentage]   = 10" ; \
+                echo "php_admin_value[opcache.validate_timestamps]     = 0" ; \
+                echo "php_admin_value[opcache.revalidate_freq]         = 0" ; \
+                echo "php_admin_value[opcache.save_comments]           = 1" ; \
+                echo "php_admin_value[opcache.fast_shutdown]           = 1" ; \
+                echo "; Map opcode cache onto 2 MiB huge pages when the host" ; \
+                echo "; has transparent_hugepage=madvise (default on modern" ; \
+                echo "; kernels). Cheap ITLB miss reduction; no-op when THP" ; \
+                echo "; is off, so safe to leave on unconditionally." ; \
+                echo "php_admin_value[opcache.huge_code_pages]         = 1" ; \
+                echo "; validate_timestamps=0 → the 2s file-mtime grace is" ; \
+                echo "; dead code; skip the syscall." ; \
+                echo "php_admin_value[opcache.file_update_protection]  = 0" ; \
+                echo "php_admin_value[opcache.jit]                     = tracing" ; \
+                echo "php_admin_value[opcache.jit_buffer_size]         = 128M" ; \
+                echo "" ; \
+                echo "; --- Snuffleupagus: strict ruleset for the untrusted pool ---" ; \
+                echo "php_admin_value[sp.configuration_file] = /etc/php/${ver}/php-snuffleupagus/wordpress-strict.rules" ; \
+                echo "" ; \
+                echo "pm                       = dynamic" ; \
+                echo "pm.max_children          = 25" ; \
+                echo "pm.start_servers         = 4" ; \
+                echo "pm.min_spare_servers     = 2" ; \
+                echo "pm.max_spare_servers     = 8" ; \
+                echo "pm.max_requests          = 500" ; \
+                echo "pm.process_idle_timeout  = 30s" ; \
+                echo "pm.status_path           = /fpm-status" ; \
+                echo "ping.path                = /fpm-ping" ; \
+                echo "ping.response            = pong" ; \
+                echo "" ; \
+                echo "; (emergency_restart_*, process_control_timeout are GLOBAL FPM" ; \
+                echo ";  directives, not per-pool — they go in php-fpm.conf [global];" ; \
+                echo ";  the upstream defaults are fine, no override here.)" ; \
+                echo "; Slowlog → stderr → docker logs." ; \
+                echo "slowlog                     = /proc/self/fd/2" ; \
+                echo "request_slowlog_timeout     = 5s" ; \
+                echo "request_terminate_timeout   = 120s" ; \
+                echo "" ; \
+                echo "chdir                       = /var/www" ; \
+                echo "catch_workers_output        = yes" ; \
+                echo "decorate_workers_output     = no" ; \
+            } >> "$pool" ; \
+        fi ; \
+    done ;\
+    # ---- Second pool: [agent] — runs as `agent`, reachable by the web ----  \
+    # Worker user is `agent:www-data` (uid 1501, gid 33, supplementary `sudo`). \
+    # Group is `www-data` (not `agent`) so the worker can write to any WP dir \
+    # that is chmod g+w www-data — uploads, plugins, themes, etc. — which is \
+    # how the [www] pool (running as phpfpm:phpfpm, uid 1500) and the [agent] \
+    # pool can both maintain a shared writable WP tree without giving the \
+    # untrusted [www] pool any sudo-adjacent privileges. \
+    # \
+    # Socket /run/php/php<ver>-agent.sock is owned agent:www-data 0660 — the \
+    # web server (also www-data) can connect (needed for MCP-over-HTTPS via \
+    # angie/nginx), and the untrusted [www] phpfpm worker (gid 1500, NOT in \
+    # www-data) cannot. Trust boundary: a compromised [www] worker cannot \
+    # reach the agent socket. \
+    # \
+    # pm=ondemand because agent/MCP traffic is bursty and rare. \
+    # Hardening intentionally relaxed: empty disable_functions, generous \
+    # memory + exec time, opcache.validate_timestamps=1 (we hot-patch \
+    # plugin files via MCP write-file / apply-patch). \
+    for d in /etc/php/*/fpm/pool.d/ ; do \
+        [ -d "$d" ] || continue ; \
+        ver="$(basename "$(dirname "$(dirname "$d")")")" ; \
+        { \
+            echo "; ==========================================================================="; \
+            echo "; agent pool — privileged MCP / WP-CLI / image-processing endpoint" ; \
+            echo "; ---------------------------------------------------------------------------" ; \
+            echo "; Untrusted HTTP cannot reach this pool (the reverse proxy only forwards" ; \
+            echo "; specific allow-listed paths like /wp-json/mcp/ here, with bearer + token" ; \
+            echo "; auth). Therefore: disable_functions=empty, Snuffleupagus noop ruleset," ; \
+            echo "; generous limits — wp-cli, Imagick, cwebp etc. all need shell + memory." ; \
+            echo "; ===========================================================================" ; \
+            echo "[agent]" ; \
+            echo "" ; \
+            echo "; Worker identity. Group is www-data (not agent) so files we write are" ; \
+            echo "; readable+writable by the [www] pool's supplementary www-data group." ; \
+            echo "user = agent" ; \
+            echo "group = www-data" ; \
+            echo "" ; \
+            echo "listen = /run/php/php${ver}-agent.sock" ; \
+            echo "listen.owner = agent" ; \
+            echo "listen.group = www-data" ; \
+            echo "listen.mode = 0660" ; \
+            echo "" ; \
+            echo "; --- Process management -----------------------------------------------" ; \
+            echo "; Bursty (parallel image conversions), rare. ondemand keeps no warm" ; \
+            echo "; workers; 8 max lets a batch of image conversions run in parallel." ; \
+            echo "pm = ondemand" ; \
+            echo "pm.max_children = 8" ; \
+            echo "pm.process_idle_timeout = 60s" ; \
+            echo "pm.max_requests = 200" ; \
+            echo "" ; \
+            echo "; --- Timeouts ---------------------------------------------------------" ; \
+            echo "; Agent scripts run backups, bulk SEO fixes, multi-image conversions." ; \
+            echo "slowlog = /proc/self/fd/2" ; \
+            echo "request_slowlog_timeout = 30s" ; \
+            echo "request_terminate_timeout = 600" ; \
+            echo "" ; \
+            echo "chdir = /var/www" ; \
+            echo "clear_env = no" ; \
+            echo "catch_workers_output = yes" ; \
+            echo "decorate_workers_output = no" ; \
+            echo "security.limit_extensions = .php" ; \
+            echo "process.dumpable = yes" ; \
+            echo "" ; \
+            echo "; --- PHP runtime (trusted) --------------------------------------------" ; \
+            echo "; Empty disable_functions: WP-CLI + Imagick + cwebp all need proc_open." ; \
+            echo "php_admin_value[disable_functions] = " ; \
+            echo "php_admin_value[allow_url_fopen]   = On" ; \
+            echo "php_admin_value[expose_php]        = Off" ; \
+            echo "php_admin_flag[mail.add_x_header]  = Off" ; \
+            echo "; NOTE: open_basedir is deliberately NOT set on this pool." ; \
+            echo "; The agent runs WP-CLI / Composer / Imagick / cwebp and writes" ; \
+            echo "; across /var/www, /home/agent and /tmp — pinning it would break" ; \
+            echo "; the very workflows it exists for. Same trust rationale as the" ; \
+            echo "; empty disable_functions above: untrusted HTTP never reaches" ; \
+            echo "; this socket (phpfpm uid 1500 is not in www-data; the proxy only" ; \
+            echo "; forwards allow-listed authenticated MCP paths)." ; \
+            echo "; Defense-in-depth even though the proxy never routes" ; \
+            echo "; PATH_INFO-styled URLs to the agent socket." ; \
+            echo "php_admin_value[cgi.fix_pathinfo]  = 0" ; \
+            echo "; Stop arg values from leaking into error logs." ; \
+            echo "php_admin_value[zend.exception_ignore_args] = 1" ; \
+            echo "" ; \
+            echo "; Memory & time — fits CMS bulk ops and image conversions." ; \
+            echo "php_admin_value[memory_limit]        = 1G" ; \
+            echo "php_admin_value[max_execution_time]  = 600" ; \
+            echo "php_admin_value[max_input_time]      = 600" ; \
+            echo "php_admin_value[max_input_vars]      = 20000" ; \
+            echo "" ; \
+            echo "; Uploads — base64-encoded images via MCP can be a few MB each." ; \
+            echo "php_admin_value[upload_max_filesize] = 128M" ; \
+            echo "php_admin_value[post_max_size]       = 128M" ; \
+            echo "php_admin_value[max_file_uploads]    = 50" ; \
+            echo "" ; \
+            echo "php_admin_value[realpath_cache_size] = 8192k" ; \
+            echo "php_admin_value[realpath_cache_ttl]  = 600" ; \
+            echo "" ; \
+            echo "; OPcache — validate_timestamps=1 because MCP hot-patches plugin" ; \
+            echo "; files (write-file / apply-patch). Otherwise stale opcodes win." ; \
+            echo "php_admin_value[opcache.enable]                = 1" ; \
+            echo "php_admin_value[opcache.enable_cli]            = 0" ; \
+            echo "php_admin_value[opcache.memory_consumption]    = 256" ; \
+            echo "php_admin_value[opcache.max_accelerated_files] = 20000" ; \
+            echo "php_admin_value[opcache.validate_timestamps]   = 1" ; \
+            echo "php_admin_value[opcache.revalidate_freq]       = 0" ; \
+            echo "php_admin_value[opcache.save_comments]         = 1" ; \
+            echo "php_admin_value[opcache.fast_shutdown]         = 1" ; \
+            echo "; JIT disabled on agent pool: PHP 8.5 tracing-JIT miscompiles" ; \
+            echo "; some single-arg string-builtin chains (observed: WordPress" ; \
+            echo "; wp_convert_hr_to_bytes -> strtolower(trim(\$v)) called as" ; \
+            echo "; strcoll() with 1 arg, fatal ArgumentCountError on every" ; \
+            echo "; request to the agent pool). MCP/wp-cli are single-shot" ; \
+            echo "; workloads that don't benefit from JIT anyway." ; \
+            echo "php_admin_value[opcache.jit]                   = off" ; \
+            echo "php_admin_value[opcache.jit_buffer_size]       = 0" ; \
+            echo "" ; \
+            echo "php_admin_flag[log_errors]             = on" ; \
+            echo "php_admin_flag[display_errors]         = off" ; \
+            echo "php_admin_flag[display_startup_errors] = off" ; \
+            echo "php_admin_value[error_log]             = /proc/self/fd/2" ; \
+            echo "" ; \
+            echo "php_admin_value[date.timezone] = Europe/Amsterdam" ; \
+            echo "" ; \
+            echo "; --- Snuffleupagus: permissive ruleset (trusted pool) -----------------" ; \
+            echo "php_admin_value[sp.configuration_file] = /etc/php/${ver}/php-snuffleupagus/mcp-agent.rules" ; \
+        } > "${d}agent.conf" ; \
+        # CLI SAPI: php-snuffleupagus now symlinks into cli/conf.d/ too \
+        # (post 0.13.0...-4myguard0). Without sp.configuration_file set, \
+        # every `wp`/`php -r` invocation prints a warning. Point CLI at \
+        # mcp-agent.rules — the same permissive ruleset the agent pool \
+        # uses, since WP-CLI / Imagick / cwebp also need proc_open/exec. \
+        if [ -d "/etc/php/${ver}/cli/conf.d" ]; then \
+            { \
+                echo "; Pick a rulebook for the CLI SAPI. snuffleupagus is loaded" ; \
+                echo "; via mods-available/snuffleupagus<ver>.ini and warns on every" ; \
+                echo "; invocation unless sp.configuration_file is set." ; \
+                echo "; mcp-agent.rules is the permissive ruleset that allows the" ; \
+                echo "; proc_open / exec / passthru calls WP-CLI / Imagick / cwebp need." ; \
+                echo "sp.configuration_file = /etc/php/${ver}/php-snuffleupagus/mcp-agent.rules" ; \
+            } > "/etc/php/${ver}/cli/conf.d/06-snuffleupagus-cli.ini" ; \
+        fi ; \
+    done ;\
+    mv /etc/php /etc/php.orig && mkdir -p /etc/php ;\
+    mv /etc/nullmailer /etc/nullmailer.orig && mkdir -p /etc/nullmailer ;\
+    # /run/php must be writable by phpfpm (worker pid/socket); www-data \
+    # only needs to traverse to connect to the socket. \
+    install -d -m 0750 -o phpfpm -g www-data /run/php ;\
+    install -d -m 0750 -o phpfpm -g www-data /var/log/php ;\
+    # Pre-create /var/www so downstream images (cms, nginx-php, …) have a \
+    # consistent doc-root with the right ownership. mode 2750 = phpfpm \
+    # writes, www-data reads, files inherit the www-data group (setgid). \
+    install -d -m 2750 -o phpfpm -g www-data /var/www
+EXPOSE  9000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD pgrep -x php-fpm > /dev/null 2>&1 && (ss -lnt | grep -q ':9000' || [ -S /run/php/php-fpm.sock ]) || exit 1
+
+STOPSIGNAL SIGQUIT
+
+CMD     ["/bootstrap.sh"]
