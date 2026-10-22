@@ -88,7 +88,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://edge.deb.myguard.nl:8888/mirror/ondrej-php ${DIST} main" \
         > /etc/apt/sources.list.d/ondrej-ppa.list ;\
     apt-get update ;\
-    apt-get install -y --no-install-recommends \
+    # Same ucf stub as src/php-fpm/.generate.sh (see there).
+    ucf_new= ;\
+    dpkg-query -W -f='${Status}' ucf 2>/dev/null | grep -q 'ok installed' || { apt-get install -y --no-install-recommends ucf ; ucf_new=1 ; } ;\
+    dpkg-divert --local --rename --divert /usr/bin/ucf.real --add /usr/bin/ucf ;\
+    sed -e '2i db_stop() { :; }' -e 's|^if \[ -e /usr/share/debconf/confmodule \]; then|if false; then|' /usr/bin/ucf.real > /usr/bin/ucf ;\
+    grep -q '^if false; then' /usr/bin/ucf || cp /usr/bin/ucf.real /usr/bin/ucf ;\
+    chmod 0755 /usr/bin/ucf ;\
+    UCF_FORCE_CONFFNEW=1 apt-get install -y --no-install-recommends \
         angie-minimal \
         php${PHPVERSION}-fpm php${PHPVERSION}-apcu php${PHPVERSION}-bz2 \
         php${PHPVERSION}-curl \
@@ -99,6 +106,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         aspell aspell-en aspell-nl hunspell-en-us \
         dictionaries-common enchant-2 libonig5 dbconfig-no-thanks \
         git unzip curl xz-utils ca-certificates locales ;\
+    rm -f /usr/bin/ucf ;\
+    dpkg-divert --local --rename --remove /usr/bin/ucf ;\
+    [ -z "$ucf_new" ] || apt-mark auto ucf ;\
+    test -x /usr/bin/ucf ; test ! -e /usr/bin/ucf.real ;\
     # ---- composer (transient) ----
     php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');" ;\
     php /tmp/composer-setup.php --filename=composer --install-dir=/usr/bin ;\

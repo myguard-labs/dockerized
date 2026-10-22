@@ -91,6 +91,85 @@ for version in "${PHP_VERSIONS[@]}"; do
     temp_files+=("$temp")
 done
 
+# The ucf stub wrapped around every PHP install. ucf asks debconf about each
+# module .ini it registers (~250 ms each, much slower under QEMU arm64), but a
+# fresh install has nothing to ask. A copy of ucf with its debconf block
+# disabled runs for this one install; the real ucf is put back after.
+# roundcube and vimbadmin carry the same lines; ci/test_ucf_stub.py keeps
+# them in sync.
+IFS= read -r -d '' UCF_STUB_ON <<'EOF' || true
+    ucf_new= ;\
+    dpkg-query -W -f='${Status}' ucf 2>/dev/null | grep -q 'ok installed' || { apt-get install -y --no-install-recommends ucf ; ucf_new=1 ; } ;\
+    dpkg-divert --local --rename --divert /usr/bin/ucf.real --add /usr/bin/ucf ;\
+    sed -e '2i db_stop() { :; }' -e 's|^if \[ -e /usr/share/debconf/confmodule \]; then|if false; then|' /usr/bin/ucf.real > /usr/bin/ucf ;\
+    grep -q '^if false; then' /usr/bin/ucf || cp /usr/bin/ucf.real /usr/bin/ucf ;\
+    chmod 0755 /usr/bin/ucf ;\
+EOF
+IFS= read -r -d '' UCF_STUB_OFF <<'EOF' || true
+    rm -f /usr/bin/ucf ;\
+    dpkg-divert --local --rename --remove /usr/bin/ucf ;\
+    [ -z "$ucf_new" ] || apt-mark auto ucf ;\
+    test -x /usr/bin/ucf ; test ! -e /usr/bin/ucf.real
+EOF
+
+# php_install_run <temp>... prints one install RUN holding every package of
+# the given per-version temps, wrapped in the ucf stub. Multi used to get one
+# RUN per version, each paying apt and ucf startup again; one RUN halves the
+# multi build. The RUN prologue comes from the first temp. Line endings are
+# rebuilt here, so a stripped package line can't leave a dangling "\".
+php_install_run() {
+    UCF_STUB_ON="$UCF_STUB_ON" UCF_STUB_OFF="$UCF_STUB_OFF" awk '
+        FNR == 1 { files++; inst = 0 }
+        /apt-get install -y --no-install-recommends \\$/ {
+            if (inst) { bad = FILENAME ": second install line"; exit }
+            inst = 1; seen++
+            if (files == 1) install = $0
+            next
+        }
+        !inst { if (files == 1) prologue = prologue $0 "\n"; next }
+        /^[[:space:]]*$/ { next }
+        {
+            line = $0
+            sub(/[[:space:]]*\\$/, "", line)
+            if (line !~ /^[[:space:]]+php[0-9.]+(-[a-z0-9]+)?$/) { bad = FILENAME ": not a package: " $0; exit }
+            pkgs[++n] = line
+        }
+        END {
+            if (bad == "" && seen != files) bad = "missing install line"
+            if (bad == "" && n == 0) bad = "no packages"
+            if (bad != "") { print "php_install_run: " bad > "/dev/stderr"; exit 1 }
+            printf "%s%s", prologue, ENVIRON["UCF_STUB_ON"]
+            sub(/apt-get install/, "UCF_FORCE_CONFFNEW=1 apt-get install", install)
+            print install
+            for (i = 1; i <= n; i++) print pkgs[i] (i < n ? " \\" : " ;\\")
+            printf "%s\n", ENVIRON["UCF_STUB_OFF"]
+        }' "$@"
+}
+
+# write_dockerfile <output> <temp>... = header + one install RUN + footer.
+write_dockerfile() {
+    local output="$1"
+    shift
+    {
+        cat "$TEMPLATE_HEADER"
+        php_install_run "$@"
+        cat "$TEMPLATE_FOOTER"
+    } > "$output"
+}
+
+ubuntu_base="${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_UBUNTU_BASE}:${UBUNTU_BASE_TAG}"
+debian_base="${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_DEBIAN_BASE}:${DEBIAN_BASE_TAG}"
+
+# Ubuntu-only strips land on a copy of each temp, so Debian keeps its PECL/
+# snuffleupagus/imap/pspell packages (the trixie mirror has them).
+ubuntu_temps=()
+for version in "${PHP_VERSIONS[@]}"; do
+    temp="Dockerfile-template.generated.php${version}"
+    cp "$temp" "$temp.ubu"
+    apply_ubuntu_strips "$temp.ubu" "$version"
+    ubuntu_temps+=("$temp.ubu")
+done
+
 # Step 2: Build individual Dockerfiles from header + version + footer
 log_info "  Building complete Dockerfiles..."
 for version in "${PHP_VERSIONS[@]}"; do
@@ -102,54 +181,38 @@ for version in "${PHP_VERSIONS[@]}"; do
     debian_output="Dockerfile-${normalized_version}-deb"
 
     log_info "    $ubuntu_output"
-    cat "$TEMPLATE_HEADER" "$temp" "$TEMPLATE_FOOTER" > "$ubuntu_output"
+    write_dockerfile "$ubuntu_output" "$temp.ubu"
+    write_dockerfile "$debian_output" "$temp"
 
-    # Set both #PHPVERSION# (env var) and #VERSION# (OCI image.version label)
-    safe_sed "#PHPVERSION#" "$version" "$ubuntu_output"
-    safe_sed "#VERSION#"    "$version" "$ubuntu_output"
+    for output in "$ubuntu_output" "$debian_output"; do
+        # Set both #PHPVERSION# (env var) and #VERSION# (OCI image.version label)
+        safe_sed "#PHPVERSION#" "$version" "$output"
+        safe_sed "#VERSION#"    "$version" "$output"
+
+        # Comment out the rm -rf for this PHP version (keep all versions in single Dockerfile potential)
+        safe_sed "rm -rf /etc/php/${version}" "#rm -rf /etc/php/${version}" "$output"
+    done
 
     # Replace registry/tag with config values
-    safe_sed "eilandert/ubuntu-base:rolling" "${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_UBUNTU_BASE}:${UBUNTU_BASE_TAG}" "$ubuntu_output"
-
-    # Comment out the rm -rf for this PHP version (keep all versions in single Dockerfile potential)
-    safe_sed "rm -rf /etc/php/${version}" "#rm -rf /etc/php/${version}" "$ubuntu_output"
-
-    # Debian variant is created from the (still-complete) ubuntu_output BEFORE
-    # we apply Ubuntu-only strips, so Debian keeps its PECL/snuffleupagus/imap/
-    # pspell packages (the trixie mirror has them).
-    cp "$ubuntu_output" "$debian_output"
-    safe_sed "${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_UBUNTU_BASE}:${UBUNTU_BASE_TAG}" "${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_DEBIAN_BASE}:${DEBIAN_BASE_TAG}" "$debian_output"
-
-    # Ubuntu-only: strip packages absent from the ondrej-noble mirror.
-    apply_ubuntu_strips "$ubuntu_output" "$version"
+    safe_sed "eilandert/ubuntu-base:rolling" "$ubuntu_base" "$ubuntu_output"
+    safe_sed "eilandert/ubuntu-base:rolling" "$debian_base" "$debian_output"
 done
 
 # Step 3: Build multi-PHP Dockerfile
 log_info "  Building multi-PHP variant..."
 multi_output="Dockerfile-multi-ubu"
-cat "$TEMPLATE_HEADER" > "$multi_output"
-for version in "${PHP_VERSIONS[@]}"; do
-    temp="Dockerfile-template.generated.php${version}"
-    cat "$temp" >> "$multi_output"
-done
-cat "$TEMPLATE_FOOTER" >> "$multi_output"
-
-safe_sed "#PHPVERSION#" "MULTI" "$multi_output"
-safe_sed "#VERSION#"    "multi" "$multi_output"
-safe_sed "MODE=FPM" "MODE=MULTI" "$multi_output"
-safe_sed "rm -rf /etc/php" "#rm -rf /etc/php" "$multi_output"
-safe_sed "eilandert/ubuntu-base:rolling" "${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_UBUNTU_BASE}:${UBUNTU_BASE_TAG}" "$multi_output"
-
-# Create debian variant from the still-complete multi BEFORE Ubuntu-only strips.
 multi_debian="Dockerfile-multi-deb"
-cp "$multi_output" "$multi_debian"
-safe_sed "${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_UBUNTU_BASE}:${UBUNTU_BASE_TAG}" "${DOCKER_REGISTRY_PREFIX}/${IMAGE_PREFIX_DEBIAN_BASE}:${DEBIAN_BASE_TAG}" "$multi_debian"
+write_dockerfile "$multi_output" "${ubuntu_temps[@]}"
+write_dockerfile "$multi_debian" "${temp_files[@]}"
 
-# Ubuntu-only strips: apply per PHP version so missing packages disappear
-# from each chunk of the multi-distro Dockerfile.
-for version in "${PHP_VERSIONS[@]}"; do
-    apply_ubuntu_strips "$multi_output" "$version"
+for output in "$multi_output" "$multi_debian"; do
+    safe_sed "#PHPVERSION#" "MULTI" "$output"
+    safe_sed "#VERSION#"    "multi" "$output"
+    safe_sed "MODE=FPM" "MODE=MULTI" "$output"
+    safe_sed "rm -rf /etc/php" "#rm -rf /etc/php" "$output"
 done
+safe_sed "eilandert/ubuntu-base:rolling" "$ubuntu_base" "$multi_output"
+safe_sed "eilandert/ubuntu-base:rolling" "$debian_base" "$multi_debian"
 
 # Step 4: Clean up temp files
 rm -f Dockerfile-template.generated.*

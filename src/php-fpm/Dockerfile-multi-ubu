@@ -63,7 +63,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     set -xe ;\
     apt-get update ;\
-    apt-get install -y --no-install-recommends \
+    ucf_new= ;\
+    dpkg-query -W -f='${Status}' ucf 2>/dev/null | grep -q 'ok installed' || { apt-get install -y --no-install-recommends ucf ; ucf_new=1 ; } ;\
+    dpkg-divert --local --rename --divert /usr/bin/ucf.real --add /usr/bin/ucf ;\
+    sed -e '2i db_stop() { :; }' -e 's|^if \[ -e /usr/share/debconf/confmodule \]; then|if false; then|' /usr/bin/ucf.real > /usr/bin/ucf ;\
+    grep -q '^if false; then' /usr/bin/ucf || cp /usr/bin/ucf.real /usr/bin/ucf ;\
+    chmod 0755 /usr/bin/ucf ;\
+    UCF_FORCE_CONFFNEW=1 apt-get install -y --no-install-recommends \
       php5.6 \
       php5.6-fpm \
       php5.6-apcu \
@@ -88,23 +94,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php5.6-sqlite3 \
       php5.6-tidy \
       php5.6-xml \
-      php5.6-zip
-
-# Package list source-of-truth. The generator strips lines per PHP version
-# and per distro via build/config.sh:
-#   - #removedinphpXY# markers      -> per-version, both distros
-#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
-#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
-#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
-# Do NOT add bare "#" comments inside the apt list: bash treats the joined
-# RUN line as one command and silently drops everything after the first "#".
-# dom/exif are NOT separate packages on any supported distro — they are part
-# of php<ver>-xml / php<ver>-common, so don't add them back.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -xe ;\
-    apt-get update ;\
-    apt-get install -y --no-install-recommends \
+      php5.6-zip \
       php7.4 \
       php7.4-fpm \
       php7.4-apcu \
@@ -127,23 +117,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php7.4-sqlite3 \
       php7.4-tidy \
       php7.4-xml \
-      php7.4-zip
-
-# Package list source-of-truth. The generator strips lines per PHP version
-# and per distro via build/config.sh:
-#   - #removedinphpXY# markers      -> per-version, both distros
-#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
-#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
-#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
-# Do NOT add bare "#" comments inside the apt list: bash treats the joined
-# RUN line as one command and silently drops everything after the first "#".
-# dom/exif are NOT separate packages on any supported distro — they are part
-# of php<ver>-xml / php<ver>-common, so don't add them back.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -xe ;\
-    apt-get update ;\
-    apt-get install -y --no-install-recommends \
+      php7.4-zip \
       php8.0 \
       php8.0-fpm \
       php8.0-apcu \
@@ -165,23 +139,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.0-sqlite3 \
       php8.0-tidy \
       php8.0-xml \
-      php8.0-zip
-
-# Package list source-of-truth. The generator strips lines per PHP version
-# and per distro via build/config.sh:
-#   - #removedinphpXY# markers      -> per-version, both distros
-#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
-#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
-#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
-# Do NOT add bare "#" comments inside the apt list: bash treats the joined
-# RUN line as one command and silently drops everything after the first "#".
-# dom/exif are NOT separate packages on any supported distro — they are part
-# of php<ver>-xml / php<ver>-common, so don't add them back.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -xe ;\
-    apt-get update ;\
-    apt-get install -y --no-install-recommends \
+      php8.0-zip \
       php8.2 \
       php8.2-fpm \
       php8.2-apcu \
@@ -203,23 +161,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.2-sqlite3 \
       php8.2-tidy \
       php8.2-xml \
-      php8.2-zip
-
-# Package list source-of-truth. The generator strips lines per PHP version
-# and per distro via build/config.sh:
-#   - #removedinphpXY# markers      -> per-version, both distros
-#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
-#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
-#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
-# Do NOT add bare "#" comments inside the apt list: bash treats the joined
-# RUN line as one command and silently drops everything after the first "#".
-# dom/exif are NOT separate packages on any supported distro — they are part
-# of php<ver>-xml / php<ver>-common, so don't add them back.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -xe ;\
-    apt-get update ;\
-    apt-get install -y --no-install-recommends \
+      php8.2-zip \
       php8.4 \
       php8.4-fpm \
       php8.4-apcu \
@@ -239,23 +181,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.4-sqlite3 \
       php8.4-tidy \
       php8.4-xml \
-      php8.4-zip
-
-# Package list source-of-truth. The generator strips lines per PHP version
-# and per distro via build/config.sh:
-#   - #removedinphpXY# markers      -> per-version, both distros
-#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
-#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
-#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
-# Do NOT add bare "#" comments inside the apt list: bash treats the joined
-# RUN line as one command and silently drops everything after the first "#".
-# dom/exif are NOT separate packages on any supported distro — they are part
-# of php<ver>-xml / php<ver>-common, so don't add them back.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -xe ;\
-    apt-get update ;\
-    apt-get install -y --no-install-recommends \
+      php8.4-zip \
       php8.5 \
       php8.5-fpm \
       php8.5-apcu \
@@ -274,23 +200,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.5-sqlite3 \
       php8.5-tidy \
       php8.5-xml \
-      php8.5-zip
-
-# Package list source-of-truth. The generator strips lines per PHP version
-# and per distro via build/config.sh:
-#   - #removedinphpXY# markers      -> per-version, both distros
-#   - PHP_VERSION_MISSING_EXTS      -> per-version, both distros
-#   - PHP_UBUNTU_MISSING_EXTS       -> all versions, Ubuntu only
-#   - PHP_UBUNTU_MISSING_CUTOFF     -> from cutoff version, Ubuntu only
-# Do NOT add bare "#" comments inside the apt list: bash treats the joined
-# RUN line as one command and silently drops everything after the first "#".
-# dom/exif are NOT separate packages on any supported distro — they are part
-# of php<ver>-xml / php<ver>-common, so don't add them back.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    set -xe ;\
-    apt-get update ;\
-    apt-get install -y --no-install-recommends \
+      php8.5-zip \
       php8.6 \
       php8.6-fpm \
       php8.6-bcmath \
@@ -308,7 +218,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.6-sqlite3 \
       php8.6-tidy \
       php8.6-xml \
-      php8.6-zip
+      php8.6-zip ;\
+    rm -f /usr/bin/ucf ;\
+    dpkg-divert --local --rename --remove /usr/bin/ucf ;\
+    [ -z "$ucf_new" ] || apt-mark auto ucf ;\
+    test -x /usr/bin/ucf ; test ! -e /usr/bin/ucf.real
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \

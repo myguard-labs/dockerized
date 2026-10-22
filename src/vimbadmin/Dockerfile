@@ -47,7 +47,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # angie + php-snuffleupagus from the signed deb.myguard.nl repo (debian-base).
     echo "deb [signed-by=/usr/share/keyrings/deb.myguard.nl.gpg] http://edge.deb.myguard.nl:8888/mirror/ondrej-php ${DIST} main" > /etc/apt/sources.list.d/ondrej-php.list ;\
     apt-get update ;\
-    apt-get install -y --no-install-recommends \
+    # Same ucf stub as src/php-fpm/.generate.sh (see there).
+    ucf_new= ;\
+    dpkg-query -W -f='${Status}' ucf 2>/dev/null | grep -q 'ok installed' || { apt-get install -y --no-install-recommends ucf ; ucf_new=1 ; } ;\
+    dpkg-divert --local --rename --divert /usr/bin/ucf.real --add /usr/bin/ucf ;\
+    sed -e '2i db_stop() { :; }' -e 's|^if \[ -e /usr/share/debconf/confmodule \]; then|if false; then|' /usr/bin/ucf.real > /usr/bin/ucf ;\
+    grep -q '^if false; then' /usr/bin/ucf || cp /usr/bin/ucf.real /usr/bin/ucf ;\
+    chmod 0755 /usr/bin/ucf ;\
+    UCF_FORCE_CONFFNEW=1 apt-get install -y --no-install-recommends \
       angie-minimal \
       php8.5-fpm php8.5-cli php8.5-mysql php8.5-mbstring php8.5-intl \
       php8.5-xml php8.5-gd php8.5-curl php8.5-bcmath php8.5-zip php8.5-gmp \
@@ -55,6 +62,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       php8.5-snuffleupagus \
       bzip2 xz-utils \
       git ca-certificates ;\
+    rm -f /usr/bin/ucf ;\
+    dpkg-divert --local --rename --remove /usr/bin/ucf ;\
+    [ -z "$ucf_new" ] || apt-mark auto ucf ;\
+    test -x /usr/bin/ucf ; test ! -e /usr/bin/ucf.real ;\
     # ---- s6-overlay (PID1 supervisor) — fetch noarch + this build's arch ----
     # deb images build dual-arch (amd64+arm64); pick the matching tarball.
     case "$(dpkg --print-architecture)" in \
