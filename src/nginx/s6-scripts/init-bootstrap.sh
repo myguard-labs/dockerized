@@ -116,6 +116,7 @@ if [ -n "${PHPVERSION:-}" ]; then
             _set_global emergency_restart_threshold 10
             _set_global emergency_restart_interval 1m
         fi
+        /usr/local/sbin/snuffleupagus-secret || { echo "[NGINX] ---> FATAL: snuffleupagus-secret failed."; exit 1; }
         php-fpm${_v} -t || { echo "[NGINX] ---> FATAL: php-fpm${_v} -t failed."; exit 1; }
     }
     if [ "${MODE:-}" = "MULTI" ]; then

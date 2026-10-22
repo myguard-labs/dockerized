@@ -15,6 +15,7 @@ if [ ! -f ${FIRSTRUN} ]; then
     echo "[PHP-FPM] no configs found, populating default configs to /etc/php/${PHPVERSION}"
     cp -r /etc/php.orig/* /etc/php/
 fi
+/usr/local/sbin/snuffleupagus-secret || exit 1
 
 FIRSTRUN="/etc/nullmailer/defaultdomain"
 if [ ! -f ${FIRSTRUN} ]; then

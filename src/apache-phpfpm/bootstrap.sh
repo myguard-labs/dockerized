@@ -64,6 +64,7 @@ startphp()
         mkdir -p /etc/php/${PHPVERSION}
         cp -r /etc/php.orig/${PHPVERSION}/* /etc/php/${PHPVERSION}
     fi
+    /usr/local/sbin/snuffleupagus-secret || exit 1
 
     if [ "${MODE}" = "FPM" ]; then
         a2enconf php${PHPVERSION}-fpm 1>/dev/null 2>&1

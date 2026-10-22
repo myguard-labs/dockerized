@@ -316,6 +316,13 @@ RUN rm -rf /tmp/* ;\
             } > "/etc/php/${ver}/cli/conf.d/06-snuffleupagus-cli.ini" ; \
         fi ; \
     done ;\
+    # The snuffleupagus postinst wrote a random secret_key at install time; \
+    # put the placeholder back so the image carries no key and \
+    # /usr/local/sbin/snuffleupagus-secret makes one per container at start. \
+    for f in /etc/php/*/php-snuffleupagus/*.rules; do \
+        [ -e "$f" ] || continue ; \
+        sed -i -E 's/^(sp\.global\.secret_key\(")[^"]*("\);)/\1YOU _DO_ NEED TO CHANGE THIS WITH SOME RANDOM CHARACTERS.\2/' "$f" ; \
+    done ;\
     mv /etc/php /etc/php.orig && mkdir -p /etc/php ;\
     mv /etc/nullmailer /etc/nullmailer.orig && mkdir -p /etc/nullmailer ;\
     # /run/php must be writable by phpfpm (worker pid/socket); www-data \

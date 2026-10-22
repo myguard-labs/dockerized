@@ -14,6 +14,7 @@ ENV     DEBIAN_FRONTEND="noninteractive" \
         MODE=FPM
 
 COPY --chmod=0755 bootstrap.sh /bootstrap.sh
+COPY --chmod=0755 snuffleupagus-secret.sh /usr/local/sbin/snuffleupagus-secret
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
