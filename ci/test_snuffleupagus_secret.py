@@ -146,6 +146,38 @@ class BuildReset(unittest.TestCase):
                                 text.index("mv /etc/php /etc/php.orig"))
 
 
+class CmsBuildKey(unittest.TestCase):
+    """docker-cms re-populates /etc/php to run wp/composer at build time."""
+
+    DOCKERFILE = ROOT / "src" / "docker-cms" / "Dockerfile-deb"
+
+    def check(self, text):
+        copy = text.index("cp -a /etc/php.orig /etc/php")
+        call = text.index(INSTALLED, copy)
+        php = text.index("/usr/local/bin/wp --allow-root", copy)
+        reset = RESET_SED.search(text, php)
+        sync = text.index("rsync -a --delete /etc/php/ /etc/php.orig/")
+        self.assertLess(copy, call)
+        self.assertLess(call, php)
+        self.assertIsNotNone(reset, "no placeholder reset after the PHP steps")
+        self.assertLess(reset.start(), sync)
+        footer = (PHPFPM / "Dockerfile-template.footer").read_text()
+        self.assertEqual(reset.group(1), RESET_SED.search(footer).group(1))
+
+    def test_build_key_set_before_php_and_reset_before_sync(self):
+        self.check(self.DOCKERFILE.read_text())
+
+    def test_negative_control_missing_build_key(self):
+        text = self.DOCKERFILE.read_text().replace(f"{INSTALLED} ;", "true ;")
+        with self.assertRaises(ValueError):
+            self.check(text)
+
+    def test_negative_control_missing_reset(self):
+        text = RESET_SED.sub("true", self.DOCKERFILE.read_text())
+        with self.assertRaises(AssertionError):
+            self.check(text)
+
+
 class BootstrapWiring(unittest.TestCase):
     CASES: ClassVar[dict[str, tuple[str, str]]] = {
         "src/php-fpm/bootstrap.sh":

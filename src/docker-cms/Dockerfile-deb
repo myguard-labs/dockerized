@@ -49,6 +49,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # back into /etc/php.orig at the end of the RUN. \
     rm -rf /etc/php ;\
     cp -a /etc/php.orig /etc/php ;\
+    # The base ships the Snuffleupagus placeholder secret_key and PHP refuses \
+    # to start on it, so wp/composer below need a key. This one is build-only: \
+    # the placeholder goes back before the sync into /etc/php.orig. \
+    /usr/local/sbin/snuffleupagus-secret ;\
     apt-get update ;\
     apt-get install -y --no-install-recommends \
         cron \
@@ -146,6 +150,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     # /etc/php.orig at first start. Any new symlinks / conf.d entries from \
     # apt installs above (notably php-vips) need to make it into .orig. \
     if [ -d /etc/php ]; then \
+        for f in /etc/php/*/php-snuffleupagus/*.rules; do \
+            [ -e "$f" ] || continue ; \
+            sed -i -E 's/^(sp\.global\.secret_key\(")[^"]*("\);)/\1YOU _DO_ NEED TO CHANGE THIS WITH SOME RANDOM CHARACTERS.\2/' "$f" ; \
+        done ; \
         rsync -a --delete /etc/php/ /etc/php.orig/ ; \
         rm -rf /etc/php ; \
         mkdir -p /etc/php ; \
