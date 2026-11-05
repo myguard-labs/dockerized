@@ -65,6 +65,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Source package from a job name: <epoch>-<pid>-<pkg>-<dist>-<arch>. pkg may
+# contain dashes (openssl-nginx), so it is everything between the pid and the
+# dist; dist and arch are single tokens. A truncated pkg breaks the delete in
+# process-incoming.sh: old versions pile up, or another source gets removed.
+job_spkg() {
+    printf '%s\n' "$1" | awk -F- '{s=$3; for(i=4;i<=NF-2;i++) s=s"-"$i; print s}'
+}
+
 # Process one job dir. Reads its .ready, derives DIST/REPO/SPKG from the
 # directory name (epoch-pid-pkg-dist-arch), runs process-incoming.sh against the
 # job dir, and writes .done/.failed back. Never aborts the worker on a job
@@ -77,11 +85,8 @@ process_job() {
     [ -e "${jobdir}/.done" ] || [ -e "${jobdir}/.failed" ] && return 0
     [ -e "${jobdir}/.ready" ] || return 0          # not finished uploading yet
 
-    # name = <epoch>-<pid>-<pkg>-<dist>-<arch>; pkg may contain no dashes (our
-    # source package names don't), so field-split is safe. arch can be a single
-    # token (amd64) — the dist is the second-to-last field.
     local spkg dist
-    spkg=$(printf '%s\n' "${name}" | awk -F- '{print $3}')
+    spkg=$(job_spkg "${name}")
     dist=$(printf '%s\n' "${name}" | awk -F- '{print $(NF-1)}')
     # REPO defaults to DIST but honour an explicit override file (openssl3 etc.)
     local repo="${dist}"
