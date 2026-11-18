@@ -160,16 +160,19 @@ if [ -n "${MODULES}" ]; then
 fi
 
 if [ ! -n "${NGX_MODULES}" ]; then
-    if [ ! -e "/etc/nginx/modules/enabled/.quiet" ]; then
+    if [ ! -e "/etc/nginx/modules-enabled/.quiet" ]; then
         echo "[NGINX] --->"
 	echo "[NGINX] ---> Without NGX_MODULES defined in the environment, all modules will be initialized"
         echo "[NGINX] ---> This may lead to issues, reduced performance, or failure to start"
         echo "[NGINX] ---> It's advised to define NGX_MODULES or manually remove entries from /etc/nginx/modules-enabled"
-	echo "[NGINX] ---> Removing mod-http-lua.conf and mod-stream-lua.conf, as those requires additional configuration to start"
+	echo "[NGINX] ---> Removing mod-http-lua.conf, mod-http-lua-upstream.conf and mod-stream-lua.conf, as those requires additional configuration to start"
         echo "[NGINX] ---> To suppress this message and behaviour please touch /etc/nginx/modules-enabled/.quiet"
         echo "[NGINX] --->"
-        rm -f /etc/nginx/modules-enabled/50-mod-http-lua.conf
-        rm -f /etc/nginx/modules-enabled/50-mod-stream-lua.conf
+        # Any priority: reorder-modules.sh links http-lua at 20. lua-upstream
+        # resolves symbols from http-lua, so it cannot stay without it.
+        for lua in mod-http-lua mod-http-lua-upstream mod-stream-lua; do
+            rm -f /etc/nginx/modules-enabled/[0-9][0-9]-"$lua".conf
+        done
     fi
 fi
 

@@ -163,8 +163,11 @@ if [ -n "${MODULES:-}" ]; then NGX_MODULES="${MODULES}"; fi
 if [ -z "${NGX_MODULES:-}" ]; then
     if [ ! -e "/etc/nginx/modules-enabled/.quiet" ]; then
         echo "[NGINX] ---> Without NGX_MODULES defined, all modules initialize; removing lua modules that need extra config."
-        rm -f /etc/nginx/modules-enabled/50-mod-http-lua.conf
-        rm -f /etc/nginx/modules-enabled/50-mod-stream-lua.conf
+        # Any priority: reorder-modules.sh links http-lua at 20. lua-upstream
+        # resolves symbols from http-lua, so it cannot stay without it.
+        for lua in mod-http-lua mod-http-lua-upstream mod-stream-lua; do
+            rm -f /etc/nginx/modules-enabled/[0-9][0-9]-"$lua".conf
+        done
     fi
 fi
 
