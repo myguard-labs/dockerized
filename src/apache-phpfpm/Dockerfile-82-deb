@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # This file might be outdated, see https://github.com/myguard-labs/dockerized/tree/master/apache-phpfpm for a recent one
 
-FROM    docker.io/eilandert/php-fpm:deb-8.2
+FROM    docker.io/eilandert/php-fpm:deb-8.3
 LABEL   maintainer="Thijs Eilander <eilander@myguard.nl>" \
         org.opencontainers.image.title="Apache with PHP-FPM" \
         org.opencontainers.image.description="Apache web server with PHP-FPM FastCGI backend" \
